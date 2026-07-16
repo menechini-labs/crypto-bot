@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
-import type { EquityPoint } from "./types";
-import StatCard from "./StatCard";
 import EquityChart from "./EquityChart";
+import StatCard from "./StatCard";
+import type { DashboardState, EquityPoint, PortfolioStats } from "./types";
+
+/* === helpers === */
 
 function fmtUsd(v: number): string {
   const sign = v >= 0 ? "+" : "-";
   return `${sign}$${Math.abs(v).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
 }
 
-function computeStats(data: EquityPoint[]) {
+function computeStats(data: EquityPoint[]): PortfolioStats {
   if (data.length === 0) {
     return { lastEquity: 0, lastPnl: 0, maxDrawdown: 0 };
   }
@@ -23,10 +25,11 @@ function computeStats(data: EquityPoint[]) {
   return { lastEquity: last.equity, lastPnl: last.pnl, maxDrawdown: maxDd };
 }
 
-export default function Dashboard() {
-  const [data, setData] = useState<EquityPoint[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [lastCycle, setLastCycle] = useState<number>(0);
+/* === custom hook (react-patterns: encapsula estado + efeito) === */
+
+function useEquity() {
+  const [state, setState] = useState<DashboardState>({ status: "loading" });
+  const [lastCycle, setLastCycle] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -36,11 +39,13 @@ export default function Dashboard() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as EquityPoint[];
         if (!active) return;
-        setData(json);
+        setState({ status: "loaded", data: json });
         if (json.length > 0) setLastCycle(json[json.length - 1].cycle);
-        setError(null);
       } catch (e) {
-        if (active) setError(e instanceof Error ? e.message : "erro desconhecido");
+        if (active) {
+          const msg = e instanceof Error ? e.message : "erro desconhecido";
+          setState({ status: "error", error: msg });
+        }
       }
     };
     load();
@@ -51,6 +56,50 @@ export default function Dashboard() {
     };
   }, []);
 
+  return { state, lastCycle };
+}
+
+/* === componente principal === */
+
+export default function Dashboard() {
+  const { state, lastCycle } = useEquity();
+
+  if (state.status === "loading") {
+    return (
+      <div className="app">
+        <header className="header">
+          <div className="brand">
+            <div className="logo">₿</div>
+            <div className="brand__titles">
+              <h1>Crypto Bot</h1>
+              <p>Paper trading · spot</p>
+            </div>
+          </div>
+        </header>
+        <div className="loading">Carregando...</div>
+      </div>
+    );
+  }
+
+  if (state.status === "error") {
+    return (
+      <div className="app">
+        <header className="header">
+          <div className="brand">
+            <div className="logo">₿</div>
+            <div className="brand__titles">
+              <h1>Crypto Bot</h1>
+              <p>Paper trading · spot</p>
+            </div>
+          </div>
+        </header>
+        <div className="error">Erro ao carregar: {state.error}</div>
+      </div>
+    );
+  }
+
+  /* loaded */
+  const { data } = state;
   const stats = computeStats(data);
   const pnlTone = stats.lastPnl >= 0 ? "pos" : "neg";
   const positions = data.length > 0 ? data[data.length - 1].positions : {};
@@ -60,7 +109,7 @@ export default function Dashboard() {
       <header className="header">
         <div className="brand">
           <div className="logo">₿</div>
-          <div>
+          <div className="brand__titles">
             <h1>Crypto Bot</h1>
             <p>Paper trading · spot · sem risco real</p>
           </div>
@@ -71,10 +120,11 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {error && <div className="error">Erro ao carregar: {error}</div>}
-
       <section className="cards">
-        <StatCard label="Equity" value={`$${stats.lastEquity.toLocaleString("en-US", { maximumFractionDigits: 2 })}`} />
+        <StatCard
+          label="Equity"
+          value={`$${stats.lastEquity.toLocaleString("en-US", { maximumFractionDigits: 2 })}`}
+        />
         <StatCard
           label="PnL"
           value={fmtUsd(stats.lastPnl)}

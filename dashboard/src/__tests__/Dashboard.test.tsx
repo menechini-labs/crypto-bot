@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import Dashboard from "../Dashboard";
 import type { EquityPoint } from "../types";
 
@@ -51,10 +51,7 @@ describe("Dashboard", () => {
   });
 
   it("mostra mensagem de erro se fetch falhar", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockRejectedValue(new Error("network")),
-    );
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network")));
     render(<Dashboard />);
     await waitFor(() => {
       expect(screen.getByText(/erro ao carregar/i)).toBeTruthy();

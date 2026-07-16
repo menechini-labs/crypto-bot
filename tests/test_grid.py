@@ -16,7 +16,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from strategy import build_grid, decide_grid
+from core.strategy import build_grid, decide_grid
 
 
 class TestBuildGrid(unittest.TestCase):

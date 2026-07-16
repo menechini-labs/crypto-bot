@@ -8,29 +8,37 @@ Nunca envia ordem real. Apenas simula compra/venda numa carteira fictícia.
 Estratégia primaria: grid (melhor em lateral, ver backtest).
 """
 import argparse
+import os
 import sys
 import time
 
-from config_loader import load_config
-from market import fetch_ohlcv
-from wallet import PaperWallet
-from risk import RiskManager
-from execution import PaperExecutor
-from reporter import append_equity, load_history
+# permite rodar 'python3 cli.py' a partir da raiz do projeto
+ROOT = os.path.dirname(os.path.abspath(__file__))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
+from core.config_loader import load_config
+from core.market import fetch_ohlcv
+from core.wallet import PaperWallet
+from core.risk import RiskManager
+from core.execution import PaperExecutor
+from core.reporter import append_equity, load_history
 
 STRATEGY_DEFAULT = "grid"
-EQUITY_PATH = "data/equity.json"
+EQUITY_PATH = os.path.join(ROOT, "data", "equity.json")
 
 
 def _signal_for(strategy: str, closes: list[float], grid_levels, has_position: bool) -> str:
     if strategy == "grid":
-        from strategy import decide_grid
+        from core.strategy import decide_grid
         return decide_grid(closes, grid_levels, has_position)
+    if strategy == "grid_dynamic":
+        from core.strategy import decide_dynamic_grid
+        return decide_dynamic_grid(closes, grid_levels, has_position)
     if strategy == "combined":
-        from strategy import decide_combined
+        from core.strategy import decide_combined
         return decide_combined(closes)
-    # baseline
-    from strategy import decide
+    from core.strategy import decide
     return decide(closes)
 
 
@@ -66,11 +74,16 @@ def run_cycle(cfg: dict, wallet: PaperWallet | None = None) -> PaperWallet:
         has_position = symbol in wallet.positions
 
         grid_levels = None
-        if strategy == "grid":
-            from strategy import build_grid
-            lo, hi = min(closes), max(closes)
-            lo, hi = lo * 1.02, hi * 0.98
-            grid_levels = build_grid(lo, hi, n=10)
+        if strategy in ("grid", "grid_dynamic"):
+            from core.strategy import build_grid, build_dynamic_grid
+            if strategy == "grid":
+                lo, hi = min(closes), max(closes)
+                lo, hi = lo * 1.02, hi * 0.98
+                grid_levels = build_grid(lo, hi, n=10)
+            else:
+                center = closes[-1]
+                step = max(last_price * 0.01, 1e-8)
+                grid_levels = build_dynamic_grid(center=center, step=step, n=11)
 
         signal = _signal_for(strategy, closes, grid_levels, has_position)
         entry = wallet.positions.get(symbol, {}).get("avg_price")
@@ -95,7 +108,7 @@ def run_cycle(cfg: dict, wallet: PaperWallet | None = None) -> PaperWallet:
         equity = wallet.equity({symbol: last_price})
         pnl = equity - cfg["initial_cash_usdt"]
         print(f"{symbol}: {last_price:.2f} | {signal} | equity ${equity:.2f} | PnL ${pnl:.2f}")
-    # registra snapshot do ciclo para o dashboard local
+
     total_equity = wallet.total_equity(prices=current_prices)
     append_equity(
         EQUITY_PATH,
@@ -109,9 +122,9 @@ def run_cycle(cfg: dict, wallet: PaperWallet | None = None) -> PaperWallet:
 
 def main():
     ap = argparse.ArgumentParser(description="Paper trading bot (spot, sem risco real)")
-    ap.add_argument("--mode", choices=["once", "continuous"], default="once")
+    ap.add_argument("--mode", choices=["once", "continuous", "report"], default="once")
     ap.add_argument("--interval", type=int, default=60, help="segundos entre ciclos")
-    ap.add_argument("--strategy", choices=["grid", "combined", "default"], default=None,
+    ap.add_argument("--strategy", choices=["grid", "grid_dynamic", "combined", "default"], default=None,
                     help="estrategia (override do config)")
     args = ap.parse_args()
 

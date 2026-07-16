@@ -12,7 +12,7 @@ import os
 import tempfile
 import unittest
 
-from reporter import append_equity, load_history, latest_equity
+from core.reporter import append_equity, load_history, latest_equity
 
 
 class TestReporter(unittest.TestCase):

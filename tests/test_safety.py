@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from execution import PaperExecutor
+from core.execution import PaperExecutor
 
 
 class TestSafetyNoLiveByDefault(unittest.TestCase):

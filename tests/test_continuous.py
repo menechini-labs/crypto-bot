@@ -14,8 +14,8 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from cli import run_cycle
-from wallet import PaperWallet
+import cli
+from core.wallet import PaperWallet
 
 
 class TestContinuousLoop(unittest.TestCase):
@@ -40,7 +40,7 @@ class TestContinuousLoop(unittest.TestCase):
             inst.mode = "paper"
             wallet = PaperWallet(initial_cash=1000.0, fee_pct=0.001)
             # nao deve levantar excecao
-            run_cycle(cfg, wallet=wallet)
+            cli.run_cycle(cfg, wallet=wallet)
             # propriedades do wallet real devem existir
             self.assertTrue(hasattr(wallet, "equity"))
 
@@ -59,7 +59,7 @@ class TestContinuousLoop(unittest.TestCase):
         with mock.patch("cli.fetch_ohlcv", side_effect=RuntimeError("network down")):
             # nao deve quebrar o loop
             wallet = PaperWallet(initial_cash=1000.0, fee_pct=0.001)
-            run_cycle(cfg, wallet=wallet)
+            cli.run_cycle(cfg, wallet=wallet)
 
 
 if __name__ == "__main__":

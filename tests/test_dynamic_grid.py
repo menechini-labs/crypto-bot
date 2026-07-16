@@ -16,7 +16,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from strategy import build_dynamic_grid, decide_dynamic_grid
+from core.strategy import build_dynamic_grid, decide_dynamic_grid
 
 
 class TestDynamicGrid(unittest.TestCase):

@@ -11,7 +11,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from strategy import decide_combined
+from core.strategy import decide_combined
 
 
 class TestStrategyCombined(unittest.TestCase):

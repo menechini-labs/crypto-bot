@@ -7,6 +7,7 @@ Usa PaperWallet + PaperExecutor (paper only, sem ordem real).
 from core.wallet import PaperWallet
 from core.risk import RiskManager
 from core.execution import PaperExecutor
+from core.metrics import compute_metrics
 
 
 def _strategy_signal(strategy_name: str, closes: list[float], grid_levels=None, has_position=False) -> str:
@@ -15,10 +16,10 @@ def _strategy_signal(strategy_name: str, closes: list[float], grid_levels=None, 
     if strategy_name == "always_hold":
         return "hold"
     if strategy_name == "grid":
-        from strategy import decide_grid
+        from core.strategy import decide_grid
         return decide_grid(closes, grid_levels, has_position)
     # estratégia real do bot
-    from strategy import decide
+    from core.strategy import decide
     return decide(closes)
 
 
@@ -42,13 +43,13 @@ def run_backtest(
     grid_levels = None
     dynamic_center = None
     if strategy_name == "grid":
-        from strategy import build_grid
+        from core.strategy import build_grid
         lo, hi = min(closes), max(closes)
         # folga de 2% para nao operar nas bordas extremas
         lo, hi = lo * 1.02, hi * 0.98
         grid_levels = build_grid(lo, hi, n=10)
     elif strategy_name == "grid_dynamic":
-        from strategy import build_dynamic_grid
+        from core.strategy import build_dynamic_grid
         # centro inicial = media dos dados (recentralizado por ciclo)
         initial_center = sum(closes[:50]) / min(50, len(closes))
         grid_levels = build_dynamic_grid(center=initial_center, step=max(initial_center * 0.01, 1e-8), n=11)
@@ -59,6 +60,7 @@ def run_backtest(
     wins = 0
     peak = initial
     max_dd = 0.0
+    equity_curve: list[float] = [initial]
 
     # precisamos de pelo menos 2 candles para um sinal
     for t in range(1, len(closes)):
@@ -66,7 +68,7 @@ def run_backtest(
         window = closes[: t + 1]  # só dados ate o momento t (sem look-ahead)
         has_position = symbol in wallet.positions
         if strategy_name == "grid_dynamic":
-            from strategy import build_dynamic_grid, decide_dynamic_grid
+            from core.strategy import build_dynamic_grid, decide_dynamic_grid
             # recentraliza o centro na media movel curta do preco
             center = window[-1]
             step = max(price * 0.01, 1e-8)  # 1% do preco por nivel
@@ -98,6 +100,7 @@ def run_backtest(
                 trades += 1
 
         equity = wallet.equity({symbol: price})
+        equity_curve.append(equity)
         if equity > peak:
             peak = equity
         dd = (peak - equity) / peak if peak > 0 else 0.0
@@ -113,6 +116,8 @@ def run_backtest(
     pnl = final_equity - initial
     win_rate = (wins / trades) if trades > 0 else 0.0
 
+    metrics = compute_metrics(equity_curve, periods_per_year=365 * 24, wins=wins, trades=trades)
+
     return {
         "symbol": symbol,
         "strategy": strategy_name,
@@ -124,4 +129,6 @@ def run_backtest(
         "pnl": pnl,
         "pnl_pct": (pnl / initial) if initial > 0 else 0.0,
         "max_drawdown_pct": max_dd,
+        "sharpe": metrics["sharpe"],
+        "cagr": metrics["cagr"],
     }

@@ -20,3 +20,7 @@ data/
 
 # OS
 .DS_Store
+
+# Node/React
+node_modules/
+dashboard/node_modules/

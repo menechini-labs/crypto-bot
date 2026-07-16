@@ -23,6 +23,7 @@ from core.wallet import PaperWallet
 from core.risk import RiskManager
 from core.execution import PaperExecutor
 from core.reporter import append_equity, load_history
+from core.dashboard import EquityServer
 
 STRATEGY_DEFAULT = "grid"
 EQUITY_PATH = os.path.join(ROOT, "data", "equity.json")
@@ -122,7 +123,7 @@ def run_cycle(cfg: dict, wallet: PaperWallet | None = None) -> PaperWallet:
 
 def main():
     ap = argparse.ArgumentParser(description="Paper trading bot (spot, sem risco real)")
-    ap.add_argument("--mode", choices=["once", "continuous", "report"], default="once")
+    ap.add_argument("--mode", choices=["once", "continuous", "report", "dashboard"], default="once")
     ap.add_argument("--interval", type=int, default=60, help="segundos entre ciclos")
     ap.add_argument("--strategy", choices=["grid", "grid_dynamic", "combined", "default"], default=None,
                     help="estrategia (override do config)")
@@ -149,6 +150,9 @@ def main():
             return
         for rec in hist[-10:]:
             print(f"ciclo {rec['cycle']}: equity ${rec['equity']:.2f} | PnL ${rec['pnl']:.2f}")
+    elif args.mode == "dashboard":
+        srv = EquityServer(EQUITY_PATH, port=8000)
+        srv.serve_forever()
     else:
         print("Modo contínuo (Ctrl+C para parar). Paper only, sem risco real.")
         try:

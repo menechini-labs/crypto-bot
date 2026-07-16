@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import BrowseStrategies from "./browse/BrowseStrategies";
 import EquityChart from "./EquityChart";
 import StatCard from "./StatCard";
 import type { DashboardState, EquityPoint, PortfolioStats } from "./types";
@@ -24,6 +25,10 @@ function computeStats(data: EquityPoint[]): PortfolioStats {
   }
   return { lastEquity: last.equity, lastPnl: last.pnl, maxDrawdown: maxDd };
 }
+
+/* === tabs === */
+
+type Tab = "dashboard" | "browse";
 
 /* === custom hook (react-patterns: encapsula estado + efeito) === */
 
@@ -59,67 +64,32 @@ function useEquity() {
   return { state, lastCycle };
 }
 
-/* === componente principal === */
+/* === DashboardTab (conteúdo original) === */
 
-export default function Dashboard() {
-  const { state, lastCycle } = useEquity();
-
+function DashboardTab({ state, lastCycle }: { state: DashboardState; lastCycle: number }) {
   if (state.status === "loading") {
     return (
-      <div className="app">
-        <header className="header">
-          <div className="brand">
-            <div className="logo">₿</div>
-            <div className="brand__titles">
-              <h1>Crypto Bot</h1>
-              <p>Paper trading · spot</p>
-            </div>
-          </div>
-        </header>
-        <div className="loading">Carregando...</div>
+      <div className="loading" style={{ marginTop: "2rem" }}>
+        Carregando...
       </div>
     );
   }
 
   if (state.status === "error") {
     return (
-      <div className="app">
-        <header className="header">
-          <div className="brand">
-            <div className="logo">₿</div>
-            <div className="brand__titles">
-              <h1>Crypto Bot</h1>
-              <p>Paper trading · spot</p>
-            </div>
-          </div>
-        </header>
-        <div className="error">Erro ao carregar: {state.error}</div>
+      <div className="error" style={{ marginTop: "1.5rem" }}>
+        Erro: {state.error}
       </div>
     );
   }
 
-  /* loaded */
   const { data } = state;
   const stats = computeStats(data);
   const pnlTone = stats.lastPnl >= 0 ? "pos" : "neg";
   const positions = data.length > 0 ? data[data.length - 1].positions : {};
 
   return (
-    <div className="app">
-      <header className="header">
-        <div className="brand">
-          <div className="logo">₿</div>
-          <div className="brand__titles">
-            <h1>Crypto Bot</h1>
-            <p>Paper trading · spot · sem risco real</p>
-          </div>
-        </div>
-        <div className="status">
-          <span className="dot" />
-          ciclo #{lastCycle} · atualizado
-        </div>
-      </header>
-
+    <>
       <section className="cards">
         <StatCard
           label="Equity"
@@ -169,6 +139,52 @@ export default function Dashboard() {
           </table>
         )}
       </section>
+    </>
+  );
+}
+
+/* === componente principal === */
+
+export default function Dashboard() {
+  const { state, lastCycle } = useEquity();
+  const [tab, setTab] = useState<Tab>("dashboard");
+
+  return (
+    <div className="app">
+      <header className="header">
+        <div className="brand">
+          <div className="logo">₿</div>
+          <div className="brand__titles">
+            <h1>Crypto Bot</h1>
+            <p>Paper trading · spot · sem risco real</p>
+          </div>
+        </div>
+        <div className="status">
+          <span className="dot" />
+          ciclo #{lastCycle} · atualizado
+        </div>
+      </header>
+
+      {/* Nav tabs */}
+      <nav className="tabs">
+        <button
+          type="button"
+          className={`tab ${tab === "dashboard" ? "tab--active" : ""}`}
+          onClick={() => setTab("dashboard")}
+        >
+          Dashboard
+        </button>
+        <button
+          type="button"
+          className={`tab ${tab === "browse" ? "tab--active" : ""}`}
+          onClick={() => setTab("browse")}
+        >
+          Browse
+        </button>
+      </nav>
+
+      {tab === "dashboard" && <DashboardTab state={state} lastCycle={lastCycle} />}
+      {tab === "browse" && <BrowseStrategies />}
     </div>
   );
 }

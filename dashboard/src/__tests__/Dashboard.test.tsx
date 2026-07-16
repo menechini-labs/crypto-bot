@@ -54,7 +54,7 @@ describe("Dashboard", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network")));
     render(<Dashboard />);
     await waitFor(() => {
-      expect(screen.getByText(/erro ao carregar/i)).toBeTruthy();
+      expect(screen.getByText(/erro:/i)).toBeTruthy();
     });
   });
 });

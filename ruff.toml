@@ -1,0 +1,34 @@
+# Ruff config — linter + formatter
+# Recomendado rodar via pre-commit (ver .pre-commit-config.yaml)
+# Ou: ruff check . && ruff format .
+
+line-length = 100
+target-version = "py311"
+
+[lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes (undefined names, unused imports)
+    "I",    # isort (imports)
+    "B",    # flake8-bugbear (bugs prováveis)
+    "A",    # flake8-builtins
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "S",    # flake8-bandit (security: eval, exec, etc)
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "S101",  # use of assert (ok em testes)
+    "N802",  # function naming (allow non-lowercase where needed)
+]
+
+[lint.per-file-ignores]
+"tests/*" = ["S101", "N802"]
+
+[lint.mccabe]
+max-complexity = 15
+
+[format]
+quote-style = "double"

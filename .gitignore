@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Ambiente virtual
+.venv/
+venv/
+
+# Segredos / credenciais — NUNCA subir
+.env
+*.secret
+config/secrets.yaml
+
+# Logs e dados de runtime
+logs/
+data/
+*.log
+
+# OS
+.DS_Store

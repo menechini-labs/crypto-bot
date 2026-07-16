@@ -1,0 +1,12 @@
+# Configuração do paper bot (spot, sem risco real)
+exchange: binance
+symbols:
+  - BTC/USDT
+  - ETH/USDT
+timeframe: 1h
+initial_cash_usdt: 1000.0
+fee_pct: 0.001          # 0.1% tipo Binance spot taker
+max_position_pct: 0.5   # no máx 50% do caixa em uma posição
+stop_loss_pct: 0.05     # 5% stop
+take_profit_pct: 0.10   # 10% target
+lookback: 100           # velas para indicadores

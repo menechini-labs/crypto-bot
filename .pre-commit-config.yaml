@@ -1,0 +1,39 @@
+# Pre-commit hooks: lint + type + dead-code + safety
+# Setup (requer ambiente com pip/venv):
+#   pip install pre-commit ruff pyright vulture safety
+#   pre-commit install
+# Depois todo commit roda os checks abaixo.
+#
+# NOTA: o container atual nao tem pip/venv instalado, entao estes hooks
+# ficam configurados mas nao executam ate o ambiente ser provisionado.
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-pyright
+    rev: v1.1.389
+    hooks:
+      - id: pyright
+        # type-check only; nao bloqueia em modos interativos
+        args: [--pythonversion, "3.11"]
+
+  - repo: local
+    hooks:
+      - id: vulture
+        name: vulture (dead code, min-confidence 65)
+        entry: vulture --min-confidence 65 .
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: safety
+        name: safety (dependency vulnerabilities)
+        entry: safety check --full-report
+        language: system
+        files: requirements.txt
+        pass_filenames: false

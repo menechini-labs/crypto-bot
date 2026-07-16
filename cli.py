@@ -5,6 +5,7 @@ Uso:
   python3 cli.py --mode continuous --interval 60
 
 Nunca envia ordem real. Apenas simula compra/venda numa carteira fictícia.
+Estratégia primaria: grid (melhor em lateral, ver backtest).
 """
 import argparse
 import sys
@@ -12,14 +13,33 @@ import time
 
 from config_loader import load_config
 from market import fetch_ohlcv
-from strategy import decide
 from wallet import PaperWallet
 from risk import RiskManager
 from execution import PaperExecutor
 
+STRATEGY_DEFAULT = "grid"
 
-def run_once(cfg: dict):
-    wallet = PaperWallet(
+
+def _signal_for(strategy: str, closes: list[float], grid_levels, has_position: bool) -> str:
+    if strategy == "grid":
+        from strategy import decide_grid
+        return decide_grid(closes, grid_levels, has_position)
+    if strategy == "combined":
+        from strategy import decide_combined
+        return decide_combined(closes)
+    # baseline
+    from strategy import decide
+    return decide(closes)
+
+
+def run_cycle(cfg: dict, wallet: PaperWallet | None = None) -> PaperWallet:
+    """Executa um ciclo de decisao para todos os simbolos.
+
+    Em caso de falha de rede (market data), apenas loga e segue.
+    Retorna o wallet atualizado (cria um novo se nao fornecido).
+    """
+    strategy = cfg.get("strategy", STRATEGY_DEFAULT)
+    wallet = wallet or PaperWallet(
         initial_cash=cfg["initial_cash_usdt"], fee_pct=cfg["fee_pct"]
     )
     risk = RiskManager(
@@ -29,45 +49,55 @@ def run_once(cfg: dict):
     )
     executor = PaperExecutor(mode="paper")
 
-    print(f"=== Paper Bot (spot) | caixa inicial ${wallet.cash:.2f} ===")
     for symbol in cfg["symbols"]:
-        candles = fetch_ohlcv(symbol, cfg["timeframe"], cfg["lookback"])
+        try:
+            candles = fetch_ohlcv(symbol, cfg["timeframe"], cfg["lookback"])
+        except RuntimeError as e:
+            print(f"[warn] {symbol}: falha ao buscar dados ({e}); pulando ciclo.")
+            continue
         closes = [c["close"] for c in candles]
         last_price = closes[-1]
-        signal = decide(closes)
+        has_position = symbol in wallet.positions
 
-        current_prices = {symbol: last_price}
+        grid_levels = None
+        if strategy == "grid":
+            from strategy import build_grid
+            lo, hi = min(closes), max(closes)
+            lo, hi = lo * 1.02, hi * 0.98
+            grid_levels = build_grid(lo, hi, n=10)
+
+        signal = _signal_for(strategy, closes, grid_levels, has_position)
         entry = wallet.positions.get(symbol, {}).get("avg_price")
 
-        # gestão de risco em posição aberta
-        if symbol in wallet.positions and entry:
+        if has_position and entry:
             if risk.should_stop_loss(entry, last_price):
-                fill = executor.execute_sell(symbol, last_price)
+                executor.execute_sell(symbol, last_price)
                 wallet.sell(symbol, last_price)
-                print(f"{symbol}: STOP-LOSS -> venda simulada @ {last_price:.2f} {fill['status']}")
+                print(f"{symbol}: STOP-LOSS @ {last_price:.2f}")
             elif risk.should_take_profit(entry, last_price):
-                fill = executor.execute_sell(symbol, last_price)
+                executor.execute_sell(symbol, last_price)
                 wallet.sell(symbol, last_price)
-                print(f"{symbol}: TAKE-PROFIT -> venda simulada @ {last_price:.2f} {fill['status']}")
+                print(f"{symbol}: TAKE-PROFIT @ {last_price:.2f}")
 
-        # sinal de entrada
         elif signal == "buy":
             notional = risk.max_notional(wallet.cash)
             if notional > 0:
-                fill = executor.execute_buy(symbol, last_price, notional)
+                executor.execute_buy(symbol, last_price, notional)
                 wallet.buy(symbol, last_price, notional)
-                print(f"{symbol}: BUY simulado notional ${notional:.2f} @ {last_price:.2f} {fill['status']}")
+                print(f"{symbol}: BUY ${notional:.2f} @ {last_price:.2f}")
 
-        equity = wallet.equity(current_prices)
+        equity = wallet.equity({symbol: last_price})
         pnl = equity - cfg["initial_cash_usdt"]
-        print(f"{symbol}: preço {last_price:.2f} | sinal {signal} | equity ${equity:.2f} | PnL ${pnl:.2f}")
-    print(f"=== Caixa final ${wallet.cash:.2f} | Posições {list(wallet.positions)} ===")
+        print(f"{symbol}: {last_price:.2f} | {signal} | equity ${equity:.2f} | PnL ${pnl:.2f}")
+    return wallet
 
 
 def main():
     ap = argparse.ArgumentParser(description="Paper trading bot (spot, sem risco real)")
     ap.add_argument("--mode", choices=["once", "continuous"], default="once")
     ap.add_argument("--interval", type=int, default=60, help="segundos entre ciclos")
+    ap.add_argument("--strategy", choices=["grid", "combined", "default"], default=None,
+                    help="estrategia (override do config)")
     args = ap.parse_args()
 
     try:
@@ -75,17 +105,23 @@ def main():
     except FileNotFoundError:
         print("config.yaml não encontrado.", file=sys.stderr)
         sys.exit(1)
+    if args.strategy:
+        cfg["strategy"] = args.strategy
+
+    wallet = PaperWallet(initial_cash=cfg["initial_cash_usdt"], fee_pct=cfg["fee_pct"])
+    print(f"=== Paper Bot (spot) | estrategia={cfg.get('strategy', STRATEGY_DEFAULT)} | caixa ${wallet.cash:.2f} ===")
 
     if args.mode == "once":
-        run_once(cfg)
+        run_cycle(cfg, wallet)
+        print(f"=== Caixa ${wallet.cash:.2f} | Posicoes {list(wallet.positions)} ===")
     else:
         print("Modo contínuo (Ctrl+C para parar). Paper only, sem risco real.")
         try:
             while True:
-                run_once(cfg)
+                wallet = run_cycle(cfg, wallet)
                 time.sleep(args.interval)
         except KeyboardInterrupt:
-            print("\nEncerrado.")
+            print(f"\nEncerrado. Caixa ${wallet.cash:.2f} | Posicoes {list(wallet.positions)}")
 
 
 if __name__ == "__main__":

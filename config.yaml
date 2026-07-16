@@ -10,3 +10,4 @@ max_position_pct: 0.5   # no máx 50% do caixa em uma posição
 stop_loss_pct: 0.05     # 5% stop
 take_profit_pct: 0.10   # 10% target
 lookback: 100           # velas para indicadores
+strategy: grid         # grid | combined | default (grid = primaria, melhor em lateral)

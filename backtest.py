@@ -9,14 +9,16 @@ from risk import RiskManager
 from execution import PaperExecutor
 
 
-def _strategy_signal(strategy_name: str, closes: list[float]) -> str:
+def _strategy_signal(strategy_name: str, closes: list[float], grid_levels=None, has_position=False) -> str:
     if strategy_name == "always_buy":
         return "buy"
     if strategy_name == "always_hold":
         return "hold"
+    if strategy_name == "grid":
+        from strategy import decide_grid
+        return decide_grid(closes, grid_levels, has_position)
     # estratégia real do bot
     from strategy import decide
-
     return decide(closes)
 
 
@@ -35,6 +37,16 @@ def run_backtest(
     )
     executor = PaperExecutor(mode="paper")
 
+    # niveis de grid derivados do range dos dados (janela deslizante nao usada aqui;
+    # usa o range global para definir a grade de operacao em lateral)
+    grid_levels = None
+    if strategy_name == "grid":
+        from strategy import build_grid
+        lo, hi = min(closes), max(closes)
+        # folga de 2% para nao operar nas bordas extremas
+        lo, hi = lo * 1.02, hi * 0.98
+        grid_levels = build_grid(lo, hi, n=10)
+
     initial = cfg["initial_cash_usdt"]
     trades = 0
     wins = 0
@@ -45,7 +57,8 @@ def run_backtest(
     for t in range(1, len(closes)):
         price = closes[t]
         window = closes[: t + 1]  # só dados ate o momento t (sem look-ahead)
-        signal = _strategy_signal(strategy_name, window)
+        has_position = symbol in wallet.positions
+        signal = _strategy_signal(strategy_name, window, grid_levels, has_position)
 
         entry = wallet.positions.get(symbol, {}).get("avg_price")
 

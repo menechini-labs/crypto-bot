@@ -2,6 +2,7 @@
 
 - decide: MA-cross + filtro RSI (baseline).
 - decide_combined: MA-cross + RSI + MACD + Bollinger.
+- decide_grid: grid em faixas de preço (opera em mercado lateral).
 """
 from indicators import ma_cross, rsi, macd, bollinger
 
@@ -40,7 +41,6 @@ def decide_combined(closes: list[float], rsi_period: int = 14) -> str:
     _mid, upper, lower = bollinger(closes, period=20, k=2.0)
     last = closes[-1]
 
-    # condições de entrada
     macd_ok = m["hist"] is None or m["hist"] > 0
     not_overbought = r is None or r < 70
     not_above_band = upper is None or last <= upper
@@ -48,7 +48,6 @@ def decide_combined(closes: list[float], rsi_period: int = 14) -> str:
     if cross == "buy" and macd_ok and not_overbought and not_above_band:
         return "buy"
 
-    # condições de saída
     below_band = lower is None or last >= lower
     macd_down = m["hist"] is not None and m["hist"] < 0
     if cross == "sell":
@@ -56,4 +55,39 @@ def decide_combined(closes: list[float], rsi_period: int = 14) -> str:
     if upper is not None and last >= upper and macd_down and below_band:
         return "sell"
 
+    return "hold"
+
+
+def build_grid(low: float, high: float, n: int) -> list[float]:
+    """Gera n níveis de preço igualmente espaçados entre low e high."""
+    if n <= 0:
+        raise ValueError("n must be positive")
+    if low >= high:
+        raise ValueError("low must be < high")
+    step = (high - low) / (n - 1)
+    return [low + step * i for i in range(n)]
+
+
+def decide_grid(closes: list[float], levels: list[float], has_position: bool) -> str:
+    """Estratégia Grid (opera em lateral, sem look-ahead).
+
+    Compra quando o preço cruza um nível para BAIXO e não tem posição.
+    Vende quando cruza para CIMA e tem posição.
+    Mantém HOLD caso contrário.
+    """
+    if len(closes) < 2 or len(levels) < 2:
+        return "hold"
+    prev = closes[-2]
+    last = closes[-1]
+
+    def level_below(p: float) -> int:
+        return sum(1 for lv in levels if lv <= p)
+
+    crossed_down = level_below(prev) > level_below(last)
+    crossed_up = level_below(prev) < level_below(last)
+
+    if crossed_down and not has_position:
+        return "buy"
+    if crossed_up and has_position:
+        return "sell"
     return "hold"

@@ -66,6 +66,23 @@ class TestPaperWallet(unittest.TestCase):
         qty = 100.0 * (1 - 0.001) / 50000.0
         self.assertAlmostEqual(eq, 900.0 + qty * 52000.0)
 
+    def test_total_equity_default_uses_avg_price(self):
+        w = PaperWallet(initial_cash=1000.0, fee_pct=0.0)
+        w.buy("BTC/USDT", price=50000.0, notional=100.0)
+        # sem preco atual, usa avg_price -> equity == caixa inicial
+        self.assertAlmostEqual(w.total_equity(), 1000.0, places=6)
+
+    def test_total_equity_with_prices(self):
+        self.w.buy("BTC/USDT", price=50000.0, notional=100.0)
+        # preco sobe -> posicao vale mais
+        eq = self.w.total_equity(prices={"BTC/USDT": 52000.0})
+        qty = 100.0 * (1 - 0.001) / 50000.0
+        self.assertAlmostEqual(eq, 900.0 + qty * 52000.0, places=6)
+
+    def test_cycle_counter_default(self):
+        w = PaperWallet(initial_cash=1000.0)
+        self.assertEqual(w._cycle, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

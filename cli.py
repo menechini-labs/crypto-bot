@@ -16,8 +16,10 @@ from market import fetch_ohlcv
 from wallet import PaperWallet
 from risk import RiskManager
 from execution import PaperExecutor
+from reporter import append_equity, load_history
 
 STRATEGY_DEFAULT = "grid"
+EQUITY_PATH = "data/equity.json"
 
 
 def _signal_for(strategy: str, closes: list[float], grid_levels, has_position: bool) -> str:
@@ -42,12 +44,15 @@ def run_cycle(cfg: dict, wallet: PaperWallet | None = None) -> PaperWallet:
     wallet = wallet or PaperWallet(
         initial_cash=cfg["initial_cash_usdt"], fee_pct=cfg["fee_pct"]
     )
+    wallet.next_cycle()
+    cycle = wallet._cycle
     risk = RiskManager(
         max_position_pct=cfg["max_position_pct"],
         stop_loss_pct=cfg["stop_loss_pct"],
         take_profit_pct=cfg["take_profit_pct"],
     )
     executor = PaperExecutor(mode="paper")
+    current_prices: dict[str, float] = {}
 
     for symbol in cfg["symbols"]:
         try:
@@ -57,6 +62,7 @@ def run_cycle(cfg: dict, wallet: PaperWallet | None = None) -> PaperWallet:
             continue
         closes = [c["close"] for c in candles]
         last_price = closes[-1]
+        current_prices[symbol] = last_price
         has_position = symbol in wallet.positions
 
         grid_levels = None
@@ -89,6 +95,15 @@ def run_cycle(cfg: dict, wallet: PaperWallet | None = None) -> PaperWallet:
         equity = wallet.equity({symbol: last_price})
         pnl = equity - cfg["initial_cash_usdt"]
         print(f"{symbol}: {last_price:.2f} | {signal} | equity ${equity:.2f} | PnL ${pnl:.2f}")
+    # registra snapshot do ciclo para o dashboard local
+    total_equity = wallet.total_equity(prices=current_prices)
+    append_equity(
+        EQUITY_PATH,
+        cycle=cycle,
+        equity=total_equity,
+        pnl=total_equity - cfg["initial_cash_usdt"],
+        positions=wallet.positions,
+    )
     return wallet
 
 
@@ -114,6 +129,13 @@ def main():
     if args.mode == "once":
         run_cycle(cfg, wallet)
         print(f"=== Caixa ${wallet.cash:.2f} | Posicoes {list(wallet.positions)} ===")
+    elif args.mode == "report":
+        hist = load_history(EQUITY_PATH)
+        if not hist:
+            print("Sem histórico ainda. Rode --mode continuous.")
+            return
+        for rec in hist[-10:]:
+            print(f"ciclo {rec['cycle']}: equity ${rec['equity']:.2f} | PnL ${rec['pnl']:.2f}")
     else:
         print("Modo contínuo (Ctrl+C para parar). Paper only, sem risco real.")
         try:

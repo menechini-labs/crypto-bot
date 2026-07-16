@@ -17,6 +17,20 @@ class PaperWallet:
         self.fee_pct = float(fee_pct)
         # symbol -> {"qty": float, "avg_price": float}
         self.positions: dict[str, dict] = {}
+        self._cycle = 0
+
+    def next_cycle(self) -> int:
+        """Incrementa e retorna o contador de ciclo (para o reporter)."""
+        self._cycle += 1
+        return self._cycle
+
+    def total_equity(self, prices: dict[str, float] | None = None) -> float:
+        """Equity total usando preços atuais se fornecidos; senão avg_price."""
+        total = self.cash
+        for sym, pos in self.positions.items():
+            price = (prices or {}).get(sym, pos["avg_price"])
+            total += pos["qty"] * price
+        return round(total, 8)
 
     def buy(self, symbol: str, price: float, notional: float) -> float:
         """Compra `notional` em USDT do `symbol` a `price`. Retorna a quantidade."""

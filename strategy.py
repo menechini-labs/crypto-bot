@@ -2,7 +2,8 @@
 
 - decide: MA-cross + filtro RSI (baseline).
 - decide_combined: MA-cross + RSI + MACD + Bollinger.
-- decide_grid: grid em faixas de preço (opera em mercado lateral).
+- decide_grid / build_grid: grid estático em faixas (opera em lateral).
+- decide_dynamic_grid / build_dynamic_grid: grid dinâmico (recentraliza).
 """
 from indicators import ma_cross, rsi, macd, bollinger
 
@@ -69,7 +70,7 @@ def build_grid(low: float, high: float, n: int) -> list[float]:
 
 
 def decide_grid(closes: list[float], levels: list[float], has_position: bool) -> str:
-    """Estratégia Grid (opera em lateral, sem look-ahead).
+    """Estratégia Grid estático (opera em lateral, sem look-ahead).
 
     Compra quando o preço cruza um nível para BAIXO e não tem posição.
     Vende quando cruza para CIMA e tem posição.
@@ -86,6 +87,43 @@ def decide_grid(closes: list[float], levels: list[float], has_position: bool) ->
     crossed_down = level_below(prev) > level_below(last)
     crossed_up = level_below(prev) < level_below(last)
 
+    if crossed_down and not has_position:
+        return "buy"
+    if crossed_up and has_position:
+        return "sell"
+    return "hold"
+
+
+def build_dynamic_grid(center: float, step: float, n: int) -> list[float]:
+    """Grid dinâmico: n níveis ao redor de um centro (n ímpar -> simétrico).
+
+    Permite recentralizar: se o preço foge do range, recalcula com novo centro.
+    """
+    if n <= 0 or n % 2 == 0:
+        raise ValueError("n must be positive odd")
+    if step <= 0:
+        raise ValueError("step must be > 0")
+    half = (n - 1) // 2
+    return [center - step * half + step * i for i in range(n)]
+
+
+def decide_dynamic_grid(
+    closes: list[float], levels: list[float], has_position: bool
+) -> str:
+    """Decisão no grid dinâmico (sem look-ahead).
+
+    Compra ao cruzar nível para BAIXO (sem posição).
+    Vende ao cruzar nível para CIMA (com posição).
+    """
+    if len(closes) < 2 or len(levels) < 2:
+        return "hold"
+    prev, last = closes[-2], closes[-1]
+
+    def below(p: float) -> int:
+        return sum(1 for lv in levels if lv <= p)
+
+    crossed_down = below(prev) > below(last)
+    crossed_up = below(prev) < below(last)
     if crossed_down and not has_position:
         return "buy"
     if crossed_up and has_position:

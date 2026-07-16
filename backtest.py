@@ -40,12 +40,19 @@ def run_backtest(
     # niveis de grid derivados do range dos dados (janela deslizante nao usada aqui;
     # usa o range global para definir a grade de operacao em lateral)
     grid_levels = None
+    dynamic_center = None
     if strategy_name == "grid":
         from strategy import build_grid
         lo, hi = min(closes), max(closes)
         # folga de 2% para nao operar nas bordas extremas
         lo, hi = lo * 1.02, hi * 0.98
         grid_levels = build_grid(lo, hi, n=10)
+    elif strategy_name == "grid_dynamic":
+        from strategy import build_dynamic_grid
+        # centro inicial = media dos dados (recentralizado por ciclo)
+        initial_center = sum(closes[:50]) / min(50, len(closes))
+        grid_levels = build_dynamic_grid(center=initial_center, step=max(initial_center * 0.01, 1e-8), n=11)
+        dynamic_center = initial_center
 
     initial = cfg["initial_cash_usdt"]
     trades = 0
@@ -58,7 +65,15 @@ def run_backtest(
         price = closes[t]
         window = closes[: t + 1]  # só dados ate o momento t (sem look-ahead)
         has_position = symbol in wallet.positions
-        signal = _strategy_signal(strategy_name, window, grid_levels, has_position)
+        if strategy_name == "grid_dynamic":
+            from strategy import build_dynamic_grid, decide_dynamic_grid
+            # recentraliza o centro na media movel curta do preco
+            center = window[-1]
+            step = max(price * 0.01, 1e-8)  # 1% do preco por nivel
+            grid_levels = build_dynamic_grid(center=center, step=step, n=11)
+            signal = decide_dynamic_grid(window, grid_levels, has_position)
+        else:
+            signal = _strategy_signal(strategy_name, window, grid_levels, has_position)
 
         entry = wallet.positions.get(symbol, {}).get("avg_price")
 

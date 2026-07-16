@@ -13,7 +13,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from wallet import PaperWallet
+from core.wallet import PaperWallet
 
 
 class TestPaperWallet(unittest.TestCase):

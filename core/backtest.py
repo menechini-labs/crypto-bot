@@ -4,9 +4,9 @@ Aplica uma estratégia sobre um histórico de closes, candle a candle.
 No passo t, a decisão usa APENAS closes[0..t] (sem olhar o futuro).
 Usa PaperWallet + PaperExecutor (paper only, sem ordem real).
 """
-from wallet import PaperWallet
-from risk import RiskManager
-from execution import PaperExecutor
+from core.wallet import PaperWallet
+from core.risk import RiskManager
+from core.execution import PaperExecutor
 
 
 def _strategy_signal(strategy_name: str, closes: list[float], grid_levels=None, has_position=False) -> str:

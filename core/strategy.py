@@ -5,7 +5,7 @@
 - decide_grid / build_grid: grid estático em faixas (opera em lateral).
 - decide_dynamic_grid / build_dynamic_grid: grid dinâmico (recentraliza).
 """
-from indicators import ma_cross, rsi, macd, bollinger
+from core.indicators import ma_cross, rsi, macd, bollinger
 
 
 def decide(closes: list[float], rsi_period: int = 14) -> str:

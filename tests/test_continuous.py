@@ -14,8 +14,8 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from cli import run_cycle
-from wallet import PaperWallet
+from core.cli import run_cycle
+from core.wallet import PaperWallet
 
 
 class TestContinuousLoop(unittest.TestCase):

@@ -16,7 +16,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from synth import make_series
+from core.synth import make_series
 
 
 class TestSynth(unittest.TestCase):

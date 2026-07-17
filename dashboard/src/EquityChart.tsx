@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 interface Props {
   points: number[];
   width?: number;
@@ -8,8 +10,13 @@ interface Props {
  * Gráfico de área SVG puro (sem libs).
  * Recebe a série de equity e anima o traço (draw-in).
  * Aplica classe dinâmica para cor da linha (positiva/negativa).
+ *
+ * A animação usa getTotalLength() para calcular o comprimento real do path,
+ * evitando o bug de stroke-dasharray fixo que quebrava com muitos pontos.
  */
 export default function EquityChart({ points, width = 1000, height = 220 }: Props) {
+  const pathRef = useRef<SVGPathElement>(null);
+
   if (points.length < 2) {
     return <p className="empty">Sem dados de equity ainda.</p>;
   }
@@ -38,6 +45,21 @@ export default function EquityChart({ points, width = 1000, height = 220 }: Prop
     coords.map(({ x, y }) => `L${x.toFixed(1)},${y.toFixed(1)}`).join(" ") +
     ` L${coords[coords.length - 1].x.toFixed(1)},${(height - pad).toFixed(1)} Z`;
 
+  // Animação draw-in: calcula comprimento real do path no DOM e anima
+  useEffect(() => {
+    const el = pathRef.current;
+    // getTotalLength() não existe em jsdom (testes), então guardamos
+    if (!el || typeof el.getTotalLength !== "function") return;
+    const len = el.getTotalLength();
+    el.style.strokeDasharray = String(len);
+    el.style.strokeDashoffset = String(len);
+    el.style.transition = `stroke-dashoffset 1.4s ease-out 0.4s`;
+    // RAF garante que o estado inicial renderizou antes de disparar
+    requestAnimationFrame(() => {
+      el.style.strokeDashoffset = "0";
+    });
+  }, [points]);
+
   return (
     <svg
       className="chart"
@@ -55,7 +77,7 @@ export default function EquityChart({ points, width = 1000, height = 220 }: Prop
       </defs>
       <line className="axis" x1={pad} y1={height - pad} x2={width - pad} y2={height - pad} />
       <path className="area" d={areaPath} />
-      <path className={lineClass} d={linePath} />
+      <path ref={pathRef} className={lineClass} d={linePath} />
     </svg>
   );
 }

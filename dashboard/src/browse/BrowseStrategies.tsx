@@ -81,7 +81,7 @@ export default function BrowseStrategies() {
     <div className="browse-page">
       <header className="browse-header">
         <h1 className="browse-title">Browse Estratégias</h1>
-        <div className="browse-header-actions">
+        <div className="browse-actions">
           <button className="btn-secondary" onClick={refresh} title="Recarregar">⟳</button>
           <Link to="/analyze" className="btn-primary">+ Novo Backtest</Link>
         </div>
@@ -89,9 +89,9 @@ export default function BrowseStrategies() {
 
       <FiltersBar current={filters} onChange={setFilters} onClear={clearFilters} />
 
-      <section className="browse-results" aria-label="Resultados">
+      <section className="browse-body" aria-label="Resultados">
         <p className="result-count">{filtered.length} estratégia(s) encontrada(s)</p>
-        <div className="strategy-grid">
+        <div className="grid">
           {filtered.map((s) => (
             <StrategyCard key={s.id} strategy={s} />
           ))}

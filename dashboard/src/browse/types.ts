@@ -4,15 +4,16 @@ export interface Strategy {
   symbol: string;
   timeframe: string;
   author: string;
-  netProfitPct: number;
-  profitFactor: number;
-  maxDrawdownPct: number;
-  winRatePct: number;
-  sharpeRatio: number;
-  sortinoRatio: number;
-  totalTrades: number;
+  netProfitPct: number | null;
+  profitFactor: number | null;
+  maxDrawdownPct: number | null;
+  winRatePct: number | null;
+  sharpeRatio: number | null;
+  sortinoRatio: number | null;
+  totalTrades: number | null;
   equityCurve: number[];
   forkUrl: string;
+  hasBacktest?: boolean;
 }
 
 export interface BacktestParams {

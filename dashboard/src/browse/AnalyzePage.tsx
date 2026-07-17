@@ -6,7 +6,7 @@ import Sparkline from "./Sparkline";
 import type { BacktestParams, BacktestReport as ReportData, AnalysisResult, Trade } from "./types";
 
 const REGIMES = ["lateral", "uptrend", "downtrend"];
-const STRATEGIES = ["grid", "grid_dynamic", "combined", "baseline", "default"];
+const STRATEGIES = ["grid", "grid_dynamic", "combined", "baseline", "default", "llm"];
 
 export default function AnalyzePage() {
   const [searchParams] = useSearchParams();

@@ -38,8 +38,8 @@ export async function fetchStrategies(
 
 export async function fetchStats(): Promise<{
   totalStrategies: number;
-  averagePnL: number;
-  averageSharpe: number;
+  averagePnL: number | null;
+  averageSharpe: number | null;
 }> {
   return request("/stats");
 }

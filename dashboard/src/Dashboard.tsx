@@ -3,6 +3,8 @@ import BrowseStrategies from "./browse/BrowseStrategies";
 import EquityChart from "./EquityChart";
 import StatCard from "./StatCard";
 import ScorePanel from "./ScorePanel";
+import AnalyzePage from "./browse/AnalyzePage";
+import HealthPanel from "./HealthPanel";
 import type { DashboardState, EquityPoint, PortfolioStats } from "./types";
 
 /* === helpers === */
@@ -29,7 +31,7 @@ function computeStats(data: EquityPoint[]): PortfolioStats {
 
 /* === tabs === */
 
-type Tab = "dashboard" | "browse" | "scoring";
+type Tab = "dashboard" | "browse" | "scoring" | "analyze" | "health";
 
 /* === custom hook (react-patterns: encapsula estado + efeito) === */
 
@@ -189,11 +191,27 @@ export default function Dashboard() {
         >
           Scoring
         </button>
+        <button
+          type="button"
+          className={`tab ${tab === "analyze" ? "tab--active" : ""}`}
+          onClick={() => setTab("analyze")}
+        >
+          Analyze
+        </button>
+        <button
+          type="button"
+          className={`tab ${tab === "health" ? "tab--active" : ""}`}
+          onClick={() => setTab("health")}
+        >
+          Health
+        </button>
       </nav>
 
       {tab === "dashboard" && <DashboardTab state={state} lastCycle={lastCycle} />}
       {tab === "browse" && <BrowseStrategies />}
       {tab === "scoring" && <ScorePanel />}
+      {tab === "analyze" && <AnalyzePage />}
+      {tab === "health" && <HealthPanel />}
     </div>
   );
 }

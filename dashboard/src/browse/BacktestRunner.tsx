@@ -13,7 +13,7 @@ const INIT: BacktestParams = {
 };
 
 const REGIMES = ["lateral", "uptrend", "downtrend"];
-const STRATEGIES = ["grid", "grid_dynamic", "combined", "baseline", "default"];
+const STRATEGIES = ["grid", "grid_dynamic", "combined", "baseline", "default", "llm"];
 
 interface Props {
   onRun?: (params: BacktestParams) => void;

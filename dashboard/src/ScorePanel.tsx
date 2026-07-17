@@ -139,6 +139,25 @@ export default function ScorePanel() {
   const verdict =
     conf >= 0.4 && risk >= 0.5 ? "EXECUTAR" : "REJEITAR";
 
+  async function fetchReal() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/market/closes?symbol=BTCUSDT&timeframe=1h&limit=100");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = await res.json();
+      if (Array.isArray(j.closes) && j.closes.length >= 20) {
+        setCloses(j.closes.join(","));
+      } else {
+        setError("Sem dados de mercado disponiveis.");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "erro ao buscar mercado");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <section className="panel sig">
       <header className="sig__head">
@@ -150,9 +169,15 @@ export default function ScorePanel() {
       </header>
 
       <p className="sig__hint">
-        Cole uma série de closes (CSV) ou gere uma sintética. O motor aplica{" "}
+        Cole uma série de closes (CSV) ou busque dados reais da Binance. O motor aplica{" "}
         <code>score_signal</code> + <code>should_execute</code> (confiança ≥ 0.40, risco ≥
         0.50).
+      </p>
+
+      <p className="sig__hint sig__hint--real">
+        <button type="button" className="sig__real" onClick={fetchReal} disabled={loading}>
+          ⬇ BTCUSDT real (1h, 100 closes)
+        </button>
       </p>
 
       <div className="sig__grid">

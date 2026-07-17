@@ -49,15 +49,15 @@ export default function BrowseStrategies() {
       list = list.filter((s) => s.timeframe === filters.timeframe);
     if (filters.minPnl !== "" && filters.minPnl !== undefined) {
       const v = Number(filters.minPnl);
-      if (!isNaN(v)) list = list.filter((s) => s.netProfitPct >= v);
+      if (!isNaN(v)) list = list.filter((s) => s.netProfitPct !== null && s.netProfitPct >= v);
     }
     if (filters.maxDd !== "" && filters.maxDd !== undefined) {
       const v = Number(filters.maxDd);
-      if (!isNaN(v)) list = list.filter((s) => s.maxDrawdownPct <= v);
+      if (!isNaN(v)) list = list.filter((s) => s.maxDrawdownPct !== null && s.maxDrawdownPct <= v);
     }
     if (filters.minSharpe !== "" && filters.minSharpe !== undefined) {
       const v = Number(filters.minSharpe);
-      if (!isNaN(v)) list = list.filter((s) => s.sharpeRatio >= v);
+      if (!isNaN(v)) list = list.filter((s) => s.sharpeRatio !== null && s.sharpeRatio >= v);
     }
     if (filters.author) list = list.filter((s) => s.author === filters.author);
     return list;

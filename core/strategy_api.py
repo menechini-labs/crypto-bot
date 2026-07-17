@@ -29,6 +29,8 @@ from core.reflection import reflect_trades, save_reflection
 from core.strategy_registry.registry import get_all as _registry_get_all
 from core import market as _market
 from core import indicators as _ind
+from core import agent_desk as _agent_desk
+from core import news as _news
 from core.scoring import score_signal as _score_signal, detect_regime as _detect_regime, should_execute
 
 logger = logging.getLogger("crypto-bot")
@@ -605,6 +607,44 @@ async def api_signals(payload: dict[str, Any]) -> dict[str, Any]:
         "regime": regime,
         "count": len(c),
         "signals": signals,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Endpoint: Agent Desk cycle (Phase 2)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/agents/cycle")
+async def api_agents_cycle() -> dict[str, Any]:
+    """Run a full Agent Desk cycle (Metrics/News/Risk/Strategy/DecisionCore)."""
+    closes = _cached_closes("BTCUSDT", "1h", 100)
+    cycle = _agent_desk.run_cycle(closes if len(closes) >= 20 else None)
+    return cycle
+
+
+# ---------------------------------------------------------------------------
+# Endpoint: aggregated crypto news (Phase 2)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/news")
+async def api_news(
+    limit: int = Query(30, ge=1, le=60),
+    sources: str | None = Query(None, description="comma-separated feed ids (coindesk,cointelegraph)"),
+) -> dict[str, Any]:
+    """Aggregated headlines + sentiment + impact from free RSS feeds."""
+    src = [s.strip() for s in sources.split(",") if s.strip()] if sources else None
+    items = _news.fetch_news(per_feed=15, sources=src)
+    items = items[:limit]
+    pos = sum(1 for i in items if i.sentiment == "positive")
+    neg = sum(1 for i in items if i.sentiment == "negative")
+    neu = sum(1 for i in items if i.sentiment == "neutral")
+    impact = [i.to_dict() for i in items if i.impact][:10]
+    return {
+        "status": "ok",
+        "count": len(items),
+        "sentiment": {"positive": pos, "negative": neg, "neutral": neu},
+        "impact_headlines": impact,
+        "items": [i.to_dict() for i in items],
     }
 
 

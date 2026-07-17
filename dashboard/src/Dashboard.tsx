@@ -5,6 +5,8 @@ import StatCard from "./StatCard";
 import ScorePanel from "./ScorePanel";
 import AnalyzePage from "./browse/AnalyzePage";
 import HealthPanel from "./HealthPanel";
+import AgentDesk from "./AgentDesk";
+import NewsFeed from "./NewsFeed";
 import type { DashboardState, EquityPoint, PortfolioStats } from "./types";
 
 /* === helpers === */
@@ -31,7 +33,7 @@ function computeStats(data: EquityPoint[]): PortfolioStats {
 
 /* === tabs === */
 
-type Tab = "dashboard" | "browse" | "scoring" | "analyze" | "health";
+type Tab = "dashboard" | "browse" | "scoring" | "analyze" | "health" | "agents" | "news";
 
 /* === custom hook (react-patterns: encapsula estado + efeito) === */
 
@@ -205,6 +207,20 @@ export default function Dashboard() {
         >
           Health
         </button>
+        <button
+          type="button"
+          className={`tab ${tab === "agents" ? "tab--active" : ""}`}
+          onClick={() => setTab("agents")}
+        >
+          Agents
+        </button>
+        <button
+          type="button"
+          className={`tab ${tab === "news" ? "tab--active" : ""}`}
+          onClick={() => setTab("news")}
+        >
+          News
+        </button>
       </nav>
 
       {tab === "dashboard" && <DashboardTab state={state} lastCycle={lastCycle} />}
@@ -212,6 +228,8 @@ export default function Dashboard() {
       {tab === "scoring" && <ScorePanel />}
       {tab === "analyze" && <AnalyzePage />}
       {tab === "health" && <HealthPanel />}
+      {tab === "agents" && <AgentDesk />}
+      {tab === "news" && <NewsFeed />}
     </div>
   );
 }

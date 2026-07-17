@@ -4,6 +4,12 @@ Limites:
 - max_position_pct: fração máxima do caixa numa única posição.
 - stop_loss_pct / take_profit_pct: saída por queda/subida percentual.
 """
+import logging
+
+logger = logging.getLogger("crypto-bot")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+
 
 
 class RiskManager:
@@ -23,6 +29,7 @@ class RiskManager:
         return cash * self.max_position_pct
 
     def should_stop_loss(self, entry: float, current: float) -> bool:
+        logger.info("should_stop_loss entry=%.2f price=%.2f -> %s", entry, current, (entry <= 0 and False or (entry - current) / entry >= self.stop_loss_pct))
         if entry <= 0:
             return False
         return (entry - current) / entry >= self.stop_loss_pct

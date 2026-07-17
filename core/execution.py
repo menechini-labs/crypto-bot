@@ -5,6 +5,12 @@ permitido se (a) mode="live" E (b) a variável de ambiente ALLOW_LIVE_TRADING=1
 estiver explicitamente setada. Mesmo assim, este arquivo NÃO envia ordens
 para nenhuma exchange — cabe ao integrador acoplar a API real e revisar o código.
 """
+import logging
+
+logger = logging.getLogger("crypto-bot")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+
 import os
 
 
@@ -19,6 +25,7 @@ class PaperExecutor:
         self.mode = mode
 
     def execute_buy(self, symbol: str, price: float, notional: float) -> dict:
+        logger.info("execute_buy symbol=%s price=%.2f notional=%.2f", symbol, price, notional)
         # Simulação local. Nenhuma chamada de rede.
         return {
             "symbol": symbol,

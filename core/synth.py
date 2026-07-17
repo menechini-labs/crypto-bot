@@ -4,6 +4,12 @@ Usado para backtest multi-regime reproduzível: lateral, alta, queda.
 Não substitui dados reais — serve para validar comportamento das
 estratégias em regimes distintos de forma controlada.
 """
+import logging
+
+logger = logging.getLogger("crypto-bot")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+
 import math
 import random
 

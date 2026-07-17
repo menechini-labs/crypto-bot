@@ -8,8 +8,14 @@ Pos-backtest ou runtime, analisa trades fechados para:
 
 Sem dependencias externas.
 """
-
 from __future__ import annotations
+import logging
+
+logger = logging.getLogger("crypto-bot")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+
+
 
 import json
 import os

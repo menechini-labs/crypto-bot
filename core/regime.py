@@ -1,3 +1,9 @@
+import logging
+
+logger = logging.getLogger("crypto-bot")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+
 """Detector de regime de mercado + seletor de estratégia.
 
 Usa inclinação da reta de regressão linear simples (sem numpy)
@@ -42,6 +48,7 @@ def detect_regime(closes: list[float], window: int = 100) -> str:
 
     Retorna: "uptrend", "downtrend", ou "lateral".
     """
+    logger.info("detect_regime closes=%d window=%d", len(closes), window)
     if len(closes) < 2:
         raise ValueError("closes precisa de pelo menos 2 valores")
     recent = closes[-min(window, len(closes)):]

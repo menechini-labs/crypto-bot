@@ -5,6 +5,12 @@
 - decide_grid / build_grid: grid estático em faixas (opera em lateral).
 - decide_dynamic_grid / build_dynamic_grid: grid dinâmico (recentraliza).
 """
+import logging
+
+logger = logging.getLogger("crypto-bot")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+
 from core.indicators import ma_cross, rsi, macd, bollinger
 
 

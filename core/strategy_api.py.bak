@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import os
 import zipfile
 from datetime import datetime, timezone
@@ -18,10 +17,7 @@ except ImportError:
     uvicorn = None  # type: ignore[assignment]
 
 from core.agent_analyzer import AnalysisResult, analyze_backtest
-from core.reflection import reflect_trades, save_reflection, load_reflections as _load_reflections
-
-logger = logging.getLogger("crypto-bot")
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+from core.reflection import reflect_trades, save_reflection, load_reflections
 
 # ---------------------------------------------------------------------------
 # App
@@ -104,7 +100,7 @@ _VALID_REGIMES = frozenset({"lateral", "uptrend", "downtrend"})
 # ---------------------------------------------------------------------------
 
 
-@app.get("/api/strategies")
+@app.get("/strategies")
 async def list_strategies(
     symbol: str | None = Query(None),
     timeframe: str | None = Query(None),
@@ -113,7 +109,6 @@ async def list_strategies(
     minSharpe: float | None = Query(None),
     author: str | None = Query(None),
 ) -> JSONResponse:
-    logger.info("list_strategies symbol=%s timeframe=%s", symbol, timeframe)
     results = STRATEGIES_MOCK
     if symbol:
         results = [s for s in results if s["symbol"] == symbol]
@@ -130,7 +125,7 @@ async def list_strategies(
     return JSONResponse(results)
 
 
-@app.get("/api/strategies/{strategy_id}")
+@app.get("/strategies/{strategy_id}")
 async def get_strategy(strategy_id: str) -> dict[str, Any] | None:
     for s in STRATEGIES_MOCK:
         if s["id"] == strategy_id:
@@ -138,7 +133,7 @@ async def get_strategy(strategy_id: str) -> dict[str, Any] | None:
     return None
 
 
-@app.get("/api/strategies/{strategy_id}/fork.json")
+@app.get("/strategies/{strategy_id}/fork.json")
 async def fork_strategy(strategy_id: str) -> dict[str, Any] | None:
     for s in STRATEGIES_MOCK:
         if s["id"] == strategy_id:
@@ -146,9 +141,8 @@ async def fork_strategy(strategy_id: str) -> dict[str, Any] | None:
     return None
 
 
-@app.get("/api/stats")
+@app.get("/stats")
 async def get_stats() -> dict[str, Any]:
-    logger.info("get_stats")
     total = len(STRATEGIES_MOCK)
     avg_pnl = sum(s["netProfitPct"] for s in STRATEGIES_MOCK) / total if total else 0
     avg_sharpe = sum(s["sharpeRatio"] for s in STRATEGIES_MOCK) / total if total else 0
@@ -161,114 +155,124 @@ async def get_stats() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Cache de backtests + endpoints
+# Endpoint: backtest (sintético)
 # ---------------------------------------------------------------------------
 
-_BACKTEST_CACHE: dict[str, dict[str, Any]] = {}
 
-
-def _bt_id(symbol: str, strategy: str, regime: str, seed: int) -> str:
-    return f"{symbol.replace('/', '_')}_{strategy}_{regime}_{seed}"
-
-
-@app.post("/api/backtest")
-async def api_backtest(payload: dict[str, Any]) -> dict[str, Any]:
-    """Roda backtest, cacheia, retorna report + analysis."""
-    logger.info(
-        "api_backtest symbol=%s strategy=%s regime=%s n=%d seed=%d",
-        payload.get("symbol"),
-        payload.get("strategy"),
-        payload.get("regime"),
-        payload.get("n", 300),
-        payload.get("seed", 42),
-    )
-    from core.backtest import run_backtest as _run
-    from core.config_loader import load_config
-    from core.synth import make_series
-
-    regime = payload.get("regime", "lateral")
-    strategy_name = payload.get("strategy", "grid")
-    symbol = payload.get("symbol", "BTCUSDT")
-    n = int(payload.get("n", 300))
-    seed = int(payload.get("seed", 42))
-
-    if strategy_name not in _VALID_STRATEGIES:
-        raise HTTPException(422, f"strategia invalida: {strategy_name}")
+@app.get("/backtest")
+async def run_backtest_endpoint(
+    regime: str = Query("lateral"),
+    n: int = Query(300, ge=50, le=2000),
+    strategy: str = Query("grid"),
+    symbol: str = Query("TEST/USDT"),
+    seed: int = Query(42, ge=0, le=10_000_000),
+) -> JSONResponse:
+    if strategy not in _VALID_STRATEGIES:
+        raise HTTPException(422, f"strategia invalida: {strategy}")
     if regime not in _VALID_REGIMES:
         raise HTTPException(422, f"regime invalido: {regime}")
-    if n < 50 or n > 2000:
-        raise HTTPException(422, "n deve estar entre 50 e 2000")
+    try:
+        from core.backtest import run_backtest as _run
+        from core.config_loader import load_config
+        from core.synth import make_series
+    except ImportError as e:
+        raise HTTPException(500, f"erro ao importar modulos: {e}") from e
 
     cfg = load_config()
     closes = make_series(regime=regime, n=n, seed=seed)
-    raw = _run(closes, cfg, symbol=symbol, strategy_name=strategy_name)
-    raw["regime"] = regime
-    raw["seed"] = seed
-
+    report = _run(closes, cfg, symbol=symbol, strategy_name=strategy)
     step = max(1, n // 60)
-    bt_id = _bt_id(symbol, strategy_name, regime, seed)
-    report: dict[str, Any] = {
-        "id": bt_id,
-        "symbol": symbol,
-        "strategy": strategy_name,
+    report.update({
         "regime": regime,
-        "timeframe": "1h",
-        "candles": n,
         "seed": seed,
-        "equity": raw.get("equity", cfg.get("initial_cash_usdt", 1000.0)),
-        "final_equity": raw.get("final_equity", 0.0),
-        "pnl": raw.get("pnl", 0.0),
-        "pnl_pct": round(raw.get("pnl_pct", 0.0), 4),
-        "max_drawdown_pct": round(raw.get("max_drawdown_pct", 0.0), 4),
-        "win_rate": round(raw.get("win_rate", 0.0), 4),
-        "sharpe": round(raw.get("sharpe", 0.0), 4),
-        "cagr": round(raw.get("cagr", 0.0), 4),
-        "trades": raw.get("trades", 0),
-        "profit_factor": raw.get("profit_factor"),
-        "sortino": raw.get("sortino"),
-        "calmar": raw.get("calmar"),
-        "equity_curve": closes[::step],
-        "trades_list": raw.get("trades_list", []),
+        "n": n,
+        "equityCurve": closes[::step],
+    })
+    return JSONResponse(report)
+
+
+# ---------------------------------------------------------------------------
+# Endpoint: mcp-backtest (formato compatível com mcp-api.trader.dev)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/mcp-backtest/{bt_id}")
+async def get_mcp_backtest(bt_id: str) -> dict[str, Any]:
+    """Retorna relatório no formato mcp-api. Atualmente mock, integrar
+    com https://mcp-api.trader.dev/backtest/{id} quando disponível."""
+    return {
+        "id": bt_id,
+        "symbol": "BTCUSDT",
+        "strategy": "grid",
+        "regime": "uptrend",
+        "timeframe": "1h",
+        "candles": 300,
+        "seed": 42,
+        "equity": 1000.0,
+        "final_equity": 1152.30,
+        "pnl": 152.30,
+        "pnl_pct": 0.152,
+        "max_drawdown_pct": 0.092,
+        "win_rate": 0.65,
+        "sharpe": 1.54,
+        "cagr": 0.241,
+        "trades": 42,
+        "profit_factor": 1.42,
+        "sortino": 2.11,
+        "calmar": 1.71,
+        "equity_curve": [1000.0, 1045.0, 1082.0, 1038.0, 1110.0, 1152.30],
+        "trades_list": [
+            {"side": "buy", "entry_price": 1000.0, "exit_price": 1045.0,
+             "pnl": 45.0, "pnl_pct": 0.045, "duration_min": 120},
+            {"side": "buy", "entry_price": 1045.0, "exit_price": 1038.0,
+             "pnl": -7.0, "pnl_pct": -0.0067, "duration_min": 90},
+        ],
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "source": "local",
+        "source": "mcp-api",
     }
 
-    _BACKTEST_CACHE[bt_id] = report
-    analysis = analyze_backtest(report).to_dict()
 
-    return {"status": "ok", "report": report, "analysis": analysis}
-
-
-@app.get("/api/backtest/{bt_id}")
-async def get_backtest(bt_id: str) -> dict[str, Any]:
-    """Retorna relatório + analysis de backtest cacheado."""
-    logger.info("get_backtest id=%s", bt_id)
-    report = _BACKTEST_CACHE.get(bt_id)
-    if not report:
-        raise HTTPException(404, f"Backtest {bt_id} nao encontrado")
-    analysis = analyze_backtest(report).to_dict()
-    return {"status": "ok", "report": report, "analysis": analysis}
+@app.get("/mcp-backtest/history")
+async def get_mcp_backtest_history() -> dict[str, Any]:
+    return {
+        "history": [
+            {"id": "01KTPY3BX6XC2T87P9M5Y2JNGR", "symbol": "BTCUSDT",
+             "pnl_pct": 12.5},
+            {"id": "XYZ123", "symbol": "ETHUSDT", "pnl_pct": -3.2},
+        ]
+    }
 
 
-@app.post("/api/backtest/{bt_id}/reflection")
-async def backtest_reflection(bt_id: str) -> dict[str, Any]:
-    """Gera reflexão pros trades de um backtest cacheado."""
-    logger.info("backtest_reflection id=%s", bt_id)
-    report = _BACKTEST_CACHE.get(bt_id)
-    if not report:
-        raise HTTPException(404, f"Backtest {bt_id} nao encontrado")
-    trades = report.get("trades_list", [])
+# ---------------------------------------------------------------------------
+# Endpoint: análise do agente
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/analysis")
+async def trigger_analysis(payload: dict[str, Any]) -> dict[str, Any]:
+    """Recebe resultado de backtest e retorna análise do agente."""
+    bt_data = payload.get("backtest")
+    if not bt_data:
+        raise HTTPException(400, "Campo 'backtest' obrigatorio")
+    result: AnalysisResult = analyze_backtest(bt_data)
+    return {"status": "ok", "analysis": result.to_dict()}
+
+
+# ---------------------------------------------------------------------------
+# Endpoint: analise de reflexao (ReflectionAgent)
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/reflection")
+async def trigger_reflection(payload: dict[str, Any]) -> dict[str, Any]:
+    """Recebe trades fechados e retorna reflexao estruturada."""
+    trades = payload.get("trades", [])
     if not trades:
-        return {
-            "status": "ok",
-            "reflection": {"total_trades": 0, "insights": ["Nenhum trade registrado"]},
-        }
-    reflection = reflect_trades(
-        trades,
-        regime=report.get("regime", "unknown"),
-        strategy=report.get("strategy", "unknown"),
-        symbol=report.get("symbol", "unknown"),
-    )
+        raise HTTPException(400, "Campo 'trades' obrigatorio com lista de trades")
+    regime = payload.get("regime", "unknown")
+    strategy = payload.get("strategy", "unknown")
+    symbol = payload.get("symbol", "unknown")
+    reflection = reflect_trades(trades, regime=regime, strategy=strategy, symbol=symbol)
     save_reflection(reflection)
     return {"status": "ok", "reflection": reflection}
 
@@ -276,7 +280,7 @@ async def backtest_reflection(bt_id: str) -> dict[str, Any]:
 @app.get("/api/reflections")
 async def get_reflections(limit: int = Query(10, ge=1, le=50)) -> dict[str, Any]:
     """Retorna historico de reflexoes salvas."""
-    return {"status": "ok", "reflections": _load_reflections(limit=limit)}
+    return {"status": "ok", "reflections": load_reflections(limit=limit)}
 
 
 # ---------------------------------------------------------------------------
@@ -286,7 +290,6 @@ async def get_reflections(limit: int = Query(10, ge=1, le=50)) -> dict[str, Any]
 
 @app.get("/download/project")
 async def download_project() -> FileResponse:
-    logger.info("download_project")
     tmp_zip = "/tmp/crypto-bot-project.zip"
     if os.path.exists(tmp_zip):
         os.remove(tmp_zip)
@@ -301,9 +304,8 @@ async def download_project() -> FileResponse:
                 arcname = os.path.relpath(fp, root)
                 z.write(fp, arcname)
 
-    return FileResponse(
-        tmp_zip, media_type="application/zip", filename="crypto-bot-project.zip"
-    )
+    return FileResponse(tmp_zip, media_type="application/zip",
+                        filename="crypto-bot-project.zip")
 
 
 # ---------------------------------------------------------------------------

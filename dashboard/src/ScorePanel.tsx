@@ -14,17 +14,51 @@ function genSeries(n: number, kind: "uptrend" | "downtrend" | "lateral"): number
   return out;
 }
 
-function Bar({ label, value }: { label: string; value: number }) {
-  const pct = Math.max(0, Math.min(1, value)) * 100;
-  const tone = value >= 0.66 ? "#2ecc71" : value >= 0.4 ? "#f1c40f" : "#e74c3c";
+/* Componente de barra segmentada (instrumento) */
+function SegmentBar({ label, value }: { label: string; value: number }) {
+  const seg = 12;
+  const lit = Math.round(Math.max(0, Math.min(1, value)) * seg);
+  const tone =
+    value >= 0.66 ? "ok" : value >= 0.4 ? "warn" : "rej";
   return (
-    <div className="score-bar">
-      <span className="score-bar__label">{label}</span>
-      <div className="score-bar__track">
-        <div className="score-bar__fill" style={{ width: `${pct}%`, background: tone }} />
+    <div className={`seg seg--${tone}`}>
+      <span className="seg__label">{label}</span>
+      <div className="seg__track">
+        {Array.from({ length: seg }).map((_, i) => (
+          <span key={i} className={`seg__cell ${i < lit ? "is-on" : ""}`} />
+        ))}
       </div>
-      <span className="score-bar__val">{value.toFixed(2)}</span>
+      <span className="seg__val">{value.toFixed(2)}</span>
     </div>
+  );
+}
+
+/* Medidor radial SVG do composite */
+function Gauge({ value, tone }: { value: number; tone: "ok" | "warn" | "rej" }) {
+  const R = 52;
+  const C = 2 * Math.PI * R;
+  const v = Math.max(0, Math.min(1, value));
+  const dash = C * v;
+  const color = tone === "ok" ? "#3ddc97" : tone === "warn" ? "#ffb000" : "#ff4d6d";
+  return (
+    <svg className="gauge" viewBox="0 0 140 140" role="img" aria-label="composite score">
+      <circle cx="70" cy="70" r={R} className="gauge__bg" />
+      <circle
+        cx="70"
+        cy="70"
+        r={R}
+        className="gauge__fg"
+        stroke={color}
+        strokeDasharray={`${dash} ${C}`}
+        transform="rotate(-90 70 70)"
+      />
+      <text x="70" y="64" className="gauge__num" fill={color}>
+        {(v * 100).toFixed(0)}
+      </text>
+      <text x="70" y="84" className="gauge__unit">
+        COMPOSITE
+      </text>
+    </svg>
   );
 }
 
@@ -34,10 +68,41 @@ export default function ScorePanel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SignalScoreResponse | null>(null);
+  const [reveal, setReveal] = useState(false);
+
+  async function runScore() {
+    setLoading(true);
+    setError(null);
+    setReveal(false);
+    try {
+      const parsed = closes
+        .split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => !Number.isNaN(n));
+      if (parsed.length < 20) {
+        setError("Informe ao menos 20 valores de closes separados por vírgula.");
+        setLoading(false);
+        return;
+      }
+      const res = await fetch("/api/score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ closes: parsed, signal, has_position: false }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setResult((await res.json()) as SignalScoreResponse);
+      requestAnimationFrame(() => setReveal(true));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "erro");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function runLLM() {
     setLoading(true);
     setError(null);
+    setReveal(false);
     try {
       const parsed = closes
         .split(",")
@@ -57,33 +122,7 @@ export default function ScorePanel() {
       const j = (await res.json()) as SignalScoreResponse & { llm_enabled: boolean };
       setResult(j);
       setSignal(j.signal as "buy" | "sell" | "hold");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "erro");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function runScore() {
-    setLoading(true);
-    setError(null);
-    try {
-      const parsed = closes
-        .split(",")
-        .map((s) => Number(s.trim()))
-        .filter((n) => !Number.isNaN(n));
-      if (parsed.length < 20) {
-        setError("Informe ao menos 20 valores de closes separados por vírgula.");
-        setLoading(false);
-        return;
-      }
-      const res = await fetch("/api/score", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ closes: parsed, signal, has_position: false }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setResult((await res.json()) as SignalScoreResponse);
+      requestAnimationFrame(() => setReveal(true));
     } catch (e) {
       setError(e instanceof Error ? e.message : "erro");
     } finally {
@@ -92,81 +131,124 @@ export default function ScorePanel() {
   }
 
   const comp = result?.score?.details?.components;
+  const conf = result?.score?.confidence ?? 0;
+  const risk = result?.score?.risk_score ?? 0;
+  const composite = result?.score?.composite ?? 0;
+  const tone: "ok" | "warn" | "rej" =
+    composite >= 0.66 ? "ok" : composite >= 0.4 ? "warn" : "rej";
+  const verdict =
+    conf >= 0.4 && risk >= 0.5 ? "EXECUTAR" : "REJEITAR";
 
   return (
-    <section className="panel">
-      <h2>Scoring de Sinal (LLM / Estratégia)</h2>
-      <p className="hint">
-        Cole uma série de closes (CSV) ou gere uma sintética. O backend aplica{" "}
-        <code>score_signal</code> + <code>should_execute</code> (confiança ≥ 0.40, risco ≥ 0.50).
+    <section className="panel sig">
+      <header className="sig__head">
+        <div>
+          <p className="sig__kicker">SIGNAL SCORING ENGINE</p>
+          <h2 className="sig__title">Leitura de Sinal</h2>
+        </div>
+        <div className={`sig__badge sig__badge--${signal}`}>{signal.toUpperCase()}</div>
+      </header>
+
+      <p className="sig__hint">
+        Cole uma série de closes (CSV) ou gere uma sintética. O motor aplica{" "}
+        <code>score_signal</code> + <code>should_execute</code> (confiança ≥ 0.40, risco ≥
+        0.50).
       </p>
 
-      <div className="score-controls">
-        <div className="score-row">
-          <label>Sinal:</label>
-          <select value={signal} onChange={(e) => setSignal(e.target.value as "buy" | "sell" | "hold")}>
-            <option value="buy">BUY</option>
-            <option value="sell">SELL</option>
-            <option value="hold">HOLD</option>
-          </select>
-          <button type="button" onClick={() => setCloses(genSeries(60, "uptrend").join(","))}>
-            Gerar uptrend
-          </button>
-          <button type="button" onClick={() => setCloses(genSeries(60, "lateral").join(","))}>
-            Gerar lateral
-          </button>
-          <button type="button" onClick={() => setCloses(genSeries(60, "downtrend").join(","))}>
-            Gerar downtrend
-          </button>
-          <button type="button" onClick={runLLM} disabled={loading}>
-            Usar LLM
-          </button>
-        </div>
-        <textarea
-          rows={3}
-          placeholder="100,101,102,103,... (>= 20 valores)"
-          value={closes}
-          onChange={(e) => setCloses(e.target.value)}
-        />
-        <button type="button" className="primary" onClick={runScore} disabled={loading}>
-          {loading ? "Calculando..." : "Calcular Score"}
-        </button>
-      </div>
-
-      {error && <p className="error">{error}</p>}
-
-      {result && (
-        <div className="score-result">
-          {!result.llm_enabled && (
-            <p className="hint">LLM desativado (sem ENABLE_LLM=1 / LLM_API_KEY): usando fallback hold.</p>
-          )}
-          <div className="score-metrics">
-            <Stat label="Confiança" value={`${(result.score.confidence * 100).toFixed(0)}%`} />
-            <Stat label="Risco" value={`${(result.score.risk_score * 100).toFixed(0)}%`} />
-            <Stat label="Composite" value={result.score.composite.toFixed(2)} />
-            <Stat label="Regime" value={result.score.details.regime} />
+      <div className="sig__grid">
+        {/* coluna de controle */}
+        <div className="sig__ctrl">
+          <div className="sig__row">
+            <label className="sig__lbl">SINAL</label>
+            <select
+              className="sig__select"
+              value={signal}
+              onChange={(e) => setSignal(e.target.value as "buy" | "sell" | "hold")}
+            >
+              <option value="buy">BUY</option>
+              <option value="sell">SELL</option>
+              <option value="hold">HOLD</option>
+            </select>
           </div>
-          {comp && (
-            <div className="score-bars">
-              <Bar label="trend" value={comp.trend} />
-              <Bar label="momentum" value={comp.momentum} />
-              <Bar label="volatility" value={comp.volatility} />
-              <Bar label="risk_reward" value={comp.risk_reward} />
-              <Bar label="regime" value={comp.regime} />
-            </div>
-          )}
-          <p className="score-explain">{result.explanation}</p>
+          <div className="sig__gen">
+            <button type="button" onClick={() => setCloses(genSeries(60, "uptrend").join(","))}>
+              ▲ uptrend
+            </button>
+            <button type="button" onClick={() => setCloses(genSeries(60, "lateral").join(","))}>
+              ▬ lateral
+            </button>
+            <button type="button" onClick={() => setCloses(genSeries(60, "downtrend").join(","))}>
+              ▼ downtrend
+            </button>
+            <button type="button" className="sig__llm" onClick={runLLM} disabled={loading}>
+              ⟁ LLM
+            </button>
+          </div>
+          <textarea
+            className="sig__ta"
+            rows={4}
+            placeholder="100,101,102,103,... (>= 20 valores)"
+            value={closes}
+            onChange={(e) => setCloses(e.target.value)}
+          />
+          <button type="button" className="sig__run" onClick={runScore} disabled={loading}>
+            {loading ? "CALCULANDO…" : "◆ CALCULAR SCORE"}
+          </button>
+          {error && <p className="sig__err">{error}</p>}
         </div>
-      )}
-    </section>
-  );
-}
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="stat">
-      <span className="stat__label">{label}</span>
-      <span className="stat__value">{value}</span>
-    </div>
+        {/* coluna de leitura */}
+        <div className={`sig__read ${reveal ? "is-reveal" : ""}`}>
+          {!result ? (
+            <div className="sig__empty">
+              <span className="sig__empty-tick">+</span>
+              <p>Aguardando sinal…</p>
+            </div>
+          ) : (
+            <>
+              <div className="sig__top">
+                <Gauge value={composite} tone={tone} />
+                <div className="sig__verdict">
+                  <span className={`sig__stamp sig__stamp--${verdict === "EXECUTAR" ? "go" : "no"}`}>
+                    {verdict}
+                  </span>
+                  <div className="sig__metrics">
+                    <div>
+                      <small>CONFIANÇA</small>
+                      <b>{(conf * 100).toFixed(0)}%</b>
+                    </div>
+                    <div>
+                      <small>RISCO</small>
+                      <b>{(risk * 100).toFixed(0)}%</b>
+                    </div>
+                    <div>
+                      <small>REGIME</small>
+                      <b>{result.score.details.regime}</b>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {comp && (
+                <div className="sig__bars">
+                  <SegmentBar label="trend" value={comp.trend} />
+                  <SegmentBar label="momentum" value={comp.momentum} />
+                  <SegmentBar label="volatility" value={comp.volatility} />
+                  <SegmentBar label="risk/rew" value={comp.risk_reward} />
+                  <SegmentBar label="regime" value={comp.regime} />
+                </div>
+              )}
+
+              <p className="sig__explain">{result.explanation}</p>
+              {!result.llm_enabled && (
+                <p className="sig__note">
+                  LLM desativado (sem ENABLE_LLM / LLM_API_KEY) — fallback hold.
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }

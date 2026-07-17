@@ -11,7 +11,7 @@ logger = logging.getLogger("crypto-bot")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 
-from core.indicators import ma_cross, rsi, macd, bollinger
+from core.indicators import bollinger, ma_cross, macd, rsi
 
 
 def decide(closes: list[float], rsi_period: int = 14) -> str:

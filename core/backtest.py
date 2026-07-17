@@ -10,10 +10,10 @@ logger = logging.getLogger("crypto-bot")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 
-from core.wallet import PaperWallet
-from core.risk import RiskManager
 from core.execution import PaperExecutor
 from core.metrics import compute_metrics
+from core.risk import RiskManager
+from core.wallet import PaperWallet
 
 
 def _strategy_signal(strategy_name: str, closes: list[float], grid_levels=None, has_position=False) -> str:
@@ -49,7 +49,6 @@ def run_backtest(
     # niveis de grid derivados do range dos dados (janela deslizante nao usada aqui;
     # usa o range global para definir a grade de operacao em lateral)
     grid_levels = None
-    dynamic_center = None
     if strategy_name == "grid":
         from core.strategy import build_grid
         lo, hi = min(closes), max(closes)
@@ -61,7 +60,6 @@ def run_backtest(
         # centro inicial = media dos dados (recentralizado por ciclo)
         initial_center = sum(closes[:50]) / min(50, len(closes))
         grid_levels = build_dynamic_grid(center=initial_center, step=max(initial_center * 0.01, 1e-8), n=11)
-        dynamic_center = initial_center
 
     initial = cfg["initial_cash_usdt"]
     trades = 0
@@ -124,11 +122,9 @@ def run_backtest(
 
         equity = wallet.equity({symbol: price})
         equity_curve.append(equity)
-        if equity > peak:
-            peak = equity
+        peak = max(peak, equity)
         dd = (peak - equity) / peak if peak > 0 else 0.0
-        if dd > max_dd:
-            max_dd = dd
+        max_dd = max(max_dd, dd)
 
     final_equity = wallet.equity({symbol: closes[-1]})
     # fecha posição remanescente para apurar PnL real

@@ -6,14 +6,14 @@ Testa o handler (retorna status + body + content-type) sem abrir socket.
 import json
 import os
 import sys
-import unittest
 import tempfile
+import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from core.dashboard import build_handler, EquityServer
+from core.dashboard import EquityServer, build_handler
 
 
 class TestDashboard(unittest.TestCase):

@@ -7,12 +7,11 @@ Regras:
 - load_history retorna lista de registros.
 - Tudo stdlib (sem pandas).
 """
-import json
 import os
 import tempfile
 import unittest
 
-from core.reporter import append_equity, load_history, latest_equity
+from core.reporter import append_equity, latest_equity, load_history
 
 
 class TestReporter(unittest.TestCase):

@@ -6,15 +6,13 @@ Regras críticas:
 - O PnL final do backtest deve bater com o equity do PaperWallet.
 - Nunca envia ordem real (usa PaperExecutor paper).
 """
-import unittest
-import sys
 import os
+import sys
+import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.backtest import run_backtest
-from core.wallet import PaperWallet
-from core.config_loader import load_config
 
 
 def make_closes(n: int, start: float = 100.0, step: float = 1.0) -> list[float]:

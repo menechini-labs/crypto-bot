@@ -17,7 +17,7 @@ def load_config(path: str = None) -> dict:
         raise FileNotFoundError(path)
     cfg: dict = {}
     section: dict | None = None
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         for line in f:
             raw = line.rstrip("\n")
             if not raw.strip() or raw.strip().startswith("#"):
@@ -28,27 +28,25 @@ def load_config(path: str = None) -> dict:
                 if item.startswith("- "):
                     if isinstance(section, list):
                         section.append(_cast(item[2:].strip()))
-                else:
-                    if ":" in item:
-                        k, v = item.split(":", 1)
-                        if isinstance(section, dict):
-                            section[k.strip()] = _cast(v.strip())
-            else:
-                if ":" in raw:
-                    k, v = raw.split(":", 1)
-                    key = k.strip()
-                    val = v.strip()
-                    if val == "":
-                        # inicia seção
-                        if key == "symbols":
-                            section = []
-                            cfg[key] = section
-                        else:
-                            section = {}
-                            cfg[key] = section
+                elif ":" in item:
+                    k, v = item.split(":", 1)
+                    if isinstance(section, dict):
+                        section[k.strip()] = _cast(v.strip())
+            elif ":" in raw:
+                k, v = raw.split(":", 1)
+                key = k.strip()
+                val = v.strip()
+                if val == "":
+                    # inicia seção
+                    if key == "symbols":
+                        section = []
+                        cfg[key] = section
                     else:
-                        cfg[key] = _cast(val)
-                        section = None
+                        section = {}
+                        cfg[key] = section
+                else:
+                    cfg[key] = _cast(val)
+                    section = None
     return cfg
 
 

@@ -1,11 +1,11 @@
 """TDD: indicadores MACD e Bollinger Bands (stdlib)."""
-import unittest
-import sys
 import os
+import sys
+import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.indicators import macd, bollinger
+from core.indicators import bollinger, macd
 
 
 def trend_up(n=60, start=100.0, step=1.0):

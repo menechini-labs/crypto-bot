@@ -5,9 +5,9 @@ Regras recomendáveis (evitar overfitting):
 - SELL: MA-cross bearish OU preço tocando banda superior com MACD negativo.
 - Caso contrário: HOLD.
 """
-import unittest
-import sys
 import os
+import sys
+import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

@@ -9,6 +9,7 @@ Pos-backtest ou runtime, analisa trades fechados para:
 Sem dependencias externas.
 """
 from __future__ import annotations
+
 import logging
 
 logger = logging.getLogger("crypto-bot")
@@ -19,7 +20,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 _REFLECTIONS_FILE = os.path.join(
@@ -66,7 +67,7 @@ def reflect_trades(
     """
     if not trades:
         return {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "regime": regime,
             "strategy": strategy,
             "symbol": symbol,
@@ -81,7 +82,6 @@ def reflect_trades(
     losers = [t for t in trades if _safe(t.get("pnl")) <= 0]
     total = len(trades)
     win_count = len(winners)
-    loss_count = len(losers)
 
     win_rate = win_count / total if total else 0.0
     avg_winner = _mean([_safe(t.get("pnl_pct")) for t in winners]) if winners else 0.0
@@ -300,7 +300,7 @@ def reflect_trades(
             )
 
     return {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "regime": regime,
         "strategy": strategy,
         "symbol": symbol,

@@ -10,10 +10,10 @@ import logging
 import mimetypes
 import os
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 
@@ -22,8 +22,9 @@ try:
 except ImportError:
     uvicorn = None  # type: ignore[assignment]
 
-from core.agent_analyzer import AnalysisResult, analyze_backtest
-from core.reflection import reflect_trades, save_reflection, load_reflections as _load_reflections
+from core.agent_analyzer import analyze_backtest
+from core.reflection import load_reflections as _load_reflections
+from core.reflection import reflect_trades, save_reflection
 
 logger = logging.getLogger("crypto-bot")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -161,7 +162,7 @@ async def get_stats() -> dict[str, Any]:
         "totalStrategies": total,
         "averagePnL": round(avg_pnl, 2),
         "averageSharpe": round(avg_sharpe, 2),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -234,7 +235,7 @@ async def api_backtest(payload: dict[str, Any]) -> dict[str, Any]:
         "calmar": raw.get("calmar"),
         "equity_curve": closes[::step],
         "trades_list": raw.get("trades_list", []),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "source": "local",
     }
 
@@ -323,7 +324,7 @@ EQUITY_PATH = os.path.join(ROOT_DIR, "data", "equity.json")
 @app.get("/equity")
 async def get_equity() -> Response:
     if os.path.exists(EQUITY_PATH):
-        with open(EQUITY_PATH, "r", encoding="utf-8") as f:
+        with open(EQUITY_PATH, encoding="utf-8") as f:
             data = f.read()
     else:
         data = "[]"

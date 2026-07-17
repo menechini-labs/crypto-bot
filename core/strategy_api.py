@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import mimetypes
 import os
+import json
 import zipfile
 from datetime import UTC, datetime
 from typing import Any
@@ -28,7 +29,7 @@ from core.reflection import reflect_trades, save_reflection
 from core.strategy_registry.registry import get_all as _registry_get_all
 from core import market as _market
 from core import indicators as _ind
-from core.scoring import score_signal as _score_signal, detect_regime as _detect_regime
+from core.scoring import score_signal as _score_signal, detect_regime as _detect_regime, should_execute
 
 logger = logging.getLogger("crypto-bot")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -372,6 +373,239 @@ async def backtest_reflection(bt_id: str) -> dict[str, Any]:
 async def get_reflections(limit: int = Query(10, ge=1, le=50)) -> dict[str, Any]:
     """Retorna historico de reflexoes salvas."""
     return {"status": "ok", "reflections": _load_reflections(limit=limit)}
+
+
+# ---------------------------------------------------------------------------
+# Phase 0/1: observability, market data, indicators, indices, signals
+# ---------------------------------------------------------------------------
+
+@app.get("/api/health")
+async def health() -> dict[str, Any]:
+    """Health check: backend vivo + componentes disponíveis."""
+    import importlib.util
+    llm_enabled = bool(os.getenv("ENABLE_LLM")) and bool(os.getenv("LLM_API_KEY"))
+    return {
+        "status": "ok",
+        "time": datetime.now(UTC).isoformat(),
+        "version": app.version,
+        "llm_enabled": llm_enabled,
+        "registry_strategies": sorted(_registry_get_all().keys()),
+        "scoring_available": importlib.util.find_spec("core.scoring") is not None,
+        "indicators_available": importlib.util.find_spec("core.indicators") is not None,
+    }
+
+
+@app.get("/api/metrics")
+async def metrics() -> dict[str, Any]:
+    """Contadores de observabilidade (Prometheus-friendly em JSON)."""
+    return {"status": "ok", "metrics": dict(_METRICS), "ts": datetime.now(UTC).isoformat()}
+
+
+@app.get("/api/risk/state")
+async def risk_state() -> dict[str, Any]:
+    """Estado do risk guard em run-time (thresholds de SL/TP, trailing, etc)."""
+    from core import config_loader
+    cfg = config_loader.load_config()
+    risk = cfg.get("risk", {}) if isinstance(cfg, dict) else {}
+    return {
+        "status": "ok",
+        "config": {
+            "max_position_pct": risk.get("max_position_pct", 0.1),
+            "stop_loss_pct": risk.get("stop_loss_pct", 0.05),
+            "take_profit_pct": risk.get("take_profit_pct", 0.1),
+            "max_drawdown_pct": risk.get("max_drawdown_pct", 0.2),
+            "trailing_stop_pct": risk.get("trailing_stop_pct", 0.0),
+            "daily_loss_limit_pct": risk.get("daily_loss_limit_pct", 0.1),
+        },
+        "metrics": {
+            "risk_rejections": _METRICS["risk_rejections"],
+            "orders_paper": _METRICS["orders_paper"],
+        },
+        "paper_only": True,
+    }
+
+
+@app.get("/api/market/closes")
+async def market_closes(
+    symbol: str = Query("BTCUSDT"),
+    timeframe: str = Query("1h"),
+    limit: int = Query(100, ge=20, le=1000),
+) -> dict[str, Any]:
+    """Fechamentos reais da Binance (público, sem auth). TTL cache 5s."""
+    try:
+        closes = _cached_closes(symbol, timeframe, limit)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("market_closes falhou: %s", exc)
+        raise HTTPException(502, f"Falha ao buscar klines: {exc}")
+    return {
+        "status": "ok",
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "count": len(closes),
+        "closes": closes,
+    }
+
+
+@app.get("/api/market/overview")
+async def market_overview(
+    symbols: str = Query("BTCUSDT,ETHUSDT,SOLUSDT"),
+    timeframe: str = Query("1h"),
+    limit: int = Query(50, ge=20, le=500),
+) -> dict[str, Any]:
+    """Visão geral de múltiplos símbolos: último preço, variação % e regime."""
+    out: list[dict[str, Any]] = []
+    for sym in [s.strip().upper() for s in symbols.split(",") if s.strip()]:
+        try:
+            closes = _cached_closes(sym, timeframe, limit)
+            if len(closes) < 2:
+                continue
+            last = closes[-1]
+            prev = closes[0]
+            change_pct = ((last - prev) / prev) * 100 if prev else 0.0
+            regime = _detect_regime(closes[-30:]) if len(closes) >= 30 else "lateral"
+            out.append({
+                "symbol": sym,
+                "last": last,
+                "change_pct": round(change_pct, 2),
+                "regime": regime,
+                "count": len(closes),
+            })
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("market_overview %s falhou: %s", sym, exc)
+            out.append({"symbol": sym, "error": str(exc)})
+    return {"status": "ok", "timeframe": timeframe, "markets": out}
+
+
+@app.post("/api/indicators")
+async def api_indicators(payload: dict[str, Any]) -> dict[str, Any]:
+    """Calcula indicadores técnicos reutilizando core.indicators.
+
+    Body: {"closes": [float,...], "symbol": str?, "timeframe": str?}
+    """
+    closes = payload.get("closes")
+    if not isinstance(closes, list) or len(closes) < 30:
+        raise HTTPException(422, "closes deve ser lista com >= 30 valores")
+    c = [float(x) for x in closes]
+    try:
+        rsi = _ind.rsi(c)
+        macd = _ind.macd(c)
+        bb = _ind.bollinger(c)
+        cross = _ind.ma_cross(c)
+        sma20 = _ind.sma(c, 20)
+        ema50 = _ind.ema(c, 50)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, f"Erro ao calcular indicadores: {exc}")
+    return {
+        "status": "ok",
+        "symbol": payload.get("symbol", "BTCUSDT"),
+        "timeframe": payload.get("timeframe", "1h"),
+        "rsi": rsi,
+        "macd": macd,
+        "bollinger": {"mid": bb[0], "upper": bb[1], "lower": bb[2]},
+        "ma_cross": cross,
+        "sma20": sma20,
+        "ema50": ema50,
+    }
+
+
+@app.get("/api/indices")
+async def api_indices() -> dict[str, Any]:
+    """Índices de mercado gratuitos e sem auth: medo/ganância + top moedas.
+
+    - alternative.me: Crypto Fear & Greed Index
+    - CoinGecko: top moedas por market cap (grátis, sem chave)
+    """
+    import time
+    now = time.time()
+    cached = _INDICES_CACHE.get("indices")
+    if cached and now - cached[0] < _INDICES_TTL:
+        return {"status": "ok", "cached": True, **cached[1]}
+
+    result: dict[str, Any] = {"fear_greed": None, "top_coins": [], "sources": []}
+    # Fear & Greed (alternative.me)
+    try:
+        with _market._urlopen("https://api.alternative.me/fng/?limit=1") as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        fg = data.get("data", [{}])[0]
+        result["fear_greed"] = {
+            "value": int(fg.get("value", 0)),
+            "classification": fg.get("value_classification", ""),
+        }
+        result["sources"].append("alternative.me")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("fear_greed falhou: %s", exc)
+    # Top coins (CoinGecko)
+    try:
+        url = (
+            "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd"
+            "&order=market_cap_desc&per_page=10&page=1&sparkline=false"
+        )
+        with _market._urlopen(url) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        coins = []
+        for row in data[:10]:
+            coins.append({
+                "id": row.get("id"),
+                "symbol": (row.get("symbol") or "").upper(),
+                "name": row.get("name"),
+                "price": row.get("current_price"),
+                "change_24h_pct": row.get("price_change_percentage_24h"),
+                "market_cap": row.get("market_cap"),
+            })
+        result["top_coins"] = coins
+        result["sources"].append("coingecko")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("coingecko falhou: %s", exc)
+    _INDICES_CACHE["indices"] = (now, result)
+    return {"status": "ok", "cached": False, **result}
+
+
+@app.post("/api/signals")
+async def api_signals(payload: dict[str, Any]) -> dict[str, Any]:
+    """Gera sinais de scoring em lote a partir de closes reais (Binance).
+
+    Body opcional: {"symbol", "timeframe", "limit", "regime"}
+    Se 'closes' fornecido, usa-os; senão busca da Binance.
+    """
+    closes = payload.get("closes")
+    symbol = payload.get("symbol", "BTCUSDT")
+    timeframe = payload.get("timeframe", "1h")
+    limit = int(payload.get("limit", 100))
+    if not isinstance(closes, list) or len(closes) < 30:
+        try:
+            closes = _cached_closes(symbol, timeframe, limit)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(502, f"Falha ao buscar closes: {exc}")
+    c = [float(x) for x in closes]
+    from core.scoring import calculate_volatility
+    regime = payload.get("regime") or (_detect_regime(c[-30:]) if len(c) >= 30 else "lateral")
+    ctx = {
+        "symbol": symbol,
+        "regime": regime,
+        "volatility": calculate_volatility(c),
+        "sl_pct": 5.0,
+        "tp_pct": 10.0,
+    }
+    signals = []
+    for sig in ("buy", "sell", "hold"):
+        score = _score_signal(c, sig, False, ctx)
+        signals.append({
+            "signal": sig,
+            "composite": round(score.composite, 4),
+            "confidence": round(score.confidence, 4),
+            "risk": round(score.risk_score, 4),
+            "execute": bool(should_execute(score)),
+            "components": score.details.get("components", {}),
+        })
+    _METRICS["signals_scored"] += 1
+    return {
+        "status": "ok",
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "regime": regime,
+        "count": len(c),
+        "signals": signals,
+    }
 
 
 # ---------------------------------------------------------------------------

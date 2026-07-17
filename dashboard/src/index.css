@@ -668,3 +668,155 @@ body::after {
     gap: 10px;
   }
 }
+
+/* — Backtest Runner */
+.backtest-runner {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-top: 20px;
+  animation: fadeSlideIn 0.4s ease-out both;
+}
+
+.bt-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+.bt-sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 16px;
+}
+
+.bt-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 16px;
+}
+
+.bt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bt-field span {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-family: "DM Mono", monospace;
+}
+
+.bt-field select,
+.bt-field input {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: "DM Mono", monospace;
+  font-size: 12px;
+  padding: 7px 10px;
+  outline: none;
+}
+
+.bt-field select:focus,
+.bt-field input:focus {
+  border-color: var(--accent);
+}
+
+.bt-run {
+  background: var(--accent);
+  border: none;
+  color: var(--bg);
+  font-family: "Figtree", system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 18px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition:
+    opacity 0.15s,
+    transform 0.1s;
+}
+
+.bt-run:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.bt-run:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.bt-run:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.bt-result {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  animation: fadeSlideIn 0.3s ease-out both;
+}
+
+.bt-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.bt-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--panel-2);
+  padding: 10px 12px;
+  border-radius: var(--radius);
+}
+
+.bt-metric-l {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-family: "DM Mono", monospace;
+}
+
+.bt-metric-v {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: "DM Mono", monospace;
+}
+
+.bt-metric-v.up {
+  color: var(--green);
+}
+
+.bt-metric-v.down {
+  color: var(--red);
+}
+
+/* Sparkline inside backtest result */
+.backtest-runner .spark {
+  height: 56px;
+  width: 100%;
+}
+
+/* Error state */
+.backtest-runner .error {
+  background: var(--red-dim);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--red);
+  padding: 12px;
+  border-radius: var(--radius);
+  margin-top: 12px;
+  font-family: "DM Mono", monospace;
+  font-size: 12px;
+}

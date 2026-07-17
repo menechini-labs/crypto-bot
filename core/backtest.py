@@ -29,7 +29,8 @@ def run_backtest(
     symbol: str = "BACKTEST/USDT",
     strategy_name: str = "default",
 ) -> dict:
-    """Retorna relatório: final_equity, pnl, trades, win_rate, max_drawdown_pct."""
+    """Retorna relatório: final_equity, pnl, trades, win_rate, max_drawdown_pct,
+    equity_curve e lista de trades."""
     wallet = PaperWallet(initial_cash=cfg["initial_cash_usdt"], fee_pct=cfg["fee_pct"])
     risk = RiskManager(
         max_position_pct=cfg["max_position_pct"],
@@ -61,6 +62,10 @@ def run_backtest(
     peak = initial
     max_dd = 0.0
     equity_curve: list[float] = [initial]
+    trade_log: list[dict] = []
+    _entry_price: float | None = None
+    _entry_time: int | None = None
+    _buy_price: float | None = None
 
     # precisamos de pelo menos 2 candles para um sinal
     for t in range(1, len(closes)):
@@ -81,22 +86,33 @@ def run_backtest(
 
         # gerencia risco em posição aberta
         if symbol in wallet.positions and entry:
-            if risk.should_stop_loss(entry, price):
-                gross = wallet.position_value(symbol, price)
+            if risk.should_stop_loss(entry, price) or risk.should_take_profit(entry, price):
+                side = "sell"
+                exit_price = price
+                pnl_trade = exit_price - entry
+                pnl_trade_pct = pnl_trade / entry if entry else 0
+                duration = t - (_entry_time or t)
+                trade_log.append({
+                    "side": side,
+                    "entry_price": round(entry, 2),
+                    "exit_price": round(exit_price, 2),
+                    "pnl": round(pnl_trade, 2),
+                    "pnl_pct": round(pnl_trade_pct, 4),
+                    "duration_min": duration,
+                })
+                _entry_price = None
+                _entry_time = None
                 wallet.sell(symbol, price)
                 trades += 1
                 if price >= entry:
                     wins += 1
-            elif risk.should_take_profit(entry, price):
-                wallet.sell(symbol, price)
-                trades += 1
-                if price >= entry:
-                    wins += 1
-        elif signal == "buy":
+        elif signal == "buy" and _entry_price is None:
             notional = risk.max_notional(wallet.cash)
             if notional > 0:
                 executor.execute_buy(symbol, price, notional)
                 wallet.buy(symbol, price, notional)
+                _entry_price = price
+                _entry_time = t
                 trades += 1
 
         equity = wallet.equity({symbol: price})
@@ -114,6 +130,7 @@ def run_backtest(
     final_equity = wallet.equity({})
 
     pnl = final_equity - initial
+    pnl_pct = pnl / initial if initial > 0 else 0.0
     win_rate = (wins / trades) if trades > 0 else 0.0
 
     metrics = compute_metrics(equity_curve, periods_per_year=365 * 24, wins=wins, trades=trades)
@@ -126,9 +143,12 @@ def run_backtest(
         "wins": wins,
         "win_rate": win_rate,
         "final_equity": final_equity,
+        "equity": initial,
         "pnl": pnl,
-        "pnl_pct": (pnl / initial) if initial > 0 else 0.0,
-        "max_drawdown_pct": max_dd,
-        "sharpe": metrics["sharpe"],
-        "cagr": metrics["cagr"],
+        "pnl_pct": round(pnl_pct, 6),
+        "max_drawdown_pct": round(max_dd, 6),
+        "sharpe": round(metrics["sharpe"], 4),
+        "cagr": round(metrics["cagr"], 6),
+        "equity_curve": [round(e, 2) for e in equity_curve[1:]],
+        "trades_list": trade_log,
     }

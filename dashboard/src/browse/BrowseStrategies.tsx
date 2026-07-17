@@ -1,90 +1,104 @@
 import { useEffect, useMemo, useState } from "react";
-import type { BrowseFilters, StrategyResult } from "./data";
-import { generateMockStrategies } from "./data";
+import { Link } from "react-router-dom";
+import { fetchStrategies } from "./api";
+import BacktestRunner from "./BacktestRunner";
 import FiltersBar from "./FiltersBar";
 import StrategyCard from "./StrategyCard";
+import type { Strategy } from "./types";
 
-/* estado dos filtros */
-const INIT_FILTERS: BrowseFilters = {
+const INIT_FILTERS: Record<string, string | number> = {
   symbol: "",
   timeframe: "",
   minPnl: "",
-  minPf: "",
+  maxDd: "",
   minSharpe: "",
-  minSortino: "",
-  minWinRate: "",
-  maxDD: "",
-  minTrades: "",
+  author: "",
 };
 
-function applyFilters(list: StrategyResult[], f: BrowseFilters): StrategyResult[] {
-  return list.filter((s) => {
-    if (f.symbol && s.symbol !== f.symbol) return false;
-    if (f.timeframe && s.timeframe !== f.timeframe) return false;
-    if (f.minPnl && s.netProfitPct < Number.parseFloat(f.minPnl)) return false;
-    if (f.minPf) {
-      const minPf = Number.parseFloat(f.minPf);
-      if (s.profitFactor != null && s.profitFactor < minPf) return false;
-      if (s.profitFactor == null && minPf > 10) return false; // PF infinity treated as very high
-    }
-    if (f.minSharpe && s.sharpeRatio < Number.parseFloat(f.minSharpe)) return false;
-    if (f.minSortino && s.sortinoRatio < Number.parseFloat(f.minSortino)) return false;
-    if (f.minWinRate && s.winRatePct < Number.parseFloat(f.minWinRate)) return false;
-    if (f.maxDD && s.maxDrawdownPct > Number.parseFloat(f.maxDD)) return false;
-    if (f.minTrades && s.totalTrades < Number.parseInt(f.minTrades, 10)) return false;
-    return true;
-  });
-}
-
-/**
- * Aba "Browse Strategies" – grid de cards com filtros.
- * Dados mock (simula API /strategies/search).
- */
 export default function BrowseStrategies() {
-  const [filters, setFilters] = useState<BrowseFilters>(INIT_FILTERS);
-  const [all, setAll] = useState<StrategyResult[]>([]);
+  const [all, setAll] = useState<Strategy[]>([]);
+  const [filters, setFilters] = useState<Record<string, string | number>>(INIT_FILTERS);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  function refresh() {
+    (async () => {
+      try {
+        setLoading(true);
+        const data = await fetchStrategies();
+        setAll(data);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Erro ao carregar estrategias");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }
 
   useEffect(() => {
-    // Simula fetch com delay pra ver loading state
-    const t = setTimeout(() => setAll(generateMockStrategies(36)), 300);
-    return () => clearTimeout(t);
+    refresh();
+    const interval = setInterval(refresh, 30_000); // refresh a cada 30s
+    return () => clearInterval(interval);
   }, []);
 
-  const filtered = useMemo(() => applyFilters(all, filters), [all, filters]);
+  const filtered = useMemo(() => {
+    let list = all;
+    if (filters.symbol)
+      list = list.filter((s) => s.symbol === filters.symbol);
+    if (filters.timeframe)
+      list = list.filter((s) => s.timeframe === filters.timeframe);
+    if (filters.minPnl !== "" && filters.minPnl !== undefined) {
+      const v = Number(filters.minPnl);
+      if (!isNaN(v)) list = list.filter((s) => s.netProfitPct >= v);
+    }
+    if (filters.maxDd !== "" && filters.maxDd !== undefined) {
+      const v = Number(filters.maxDd);
+      if (!isNaN(v)) list = list.filter((s) => s.maxDrawdownPct <= v);
+    }
+    if (filters.minSharpe !== "" && filters.minSharpe !== undefined) {
+      const v = Number(filters.minSharpe);
+      if (!isNaN(v)) list = list.filter((s) => s.sharpeRatio >= v);
+    }
+    if (filters.author) list = list.filter((s) => s.author === filters.author);
+    return list;
+  }, [all, filters]);
+
+  const clearFilters = () => setFilters(INIT_FILTERS);
+
+  if (loading)
+    return <div className="loading" role="status">Carregando estratégias...</div>;
+  if (error)
+    return (
+      <div className="error" role="alert">
+        <p>{error}</p>
+        <button onClick={() => window.location.reload()} className="btn-secondary">
+          Tentar novamente
+        </button>
+      </div>
+    );
 
   return (
     <div className="browse-page">
-      <div className="browse-header">
-        <h1 className="browse-title">Browse Strategies</h1>
-        <p className="browse-sub">
-          {all.length} estratégias simuladas. Filtre por KPI para encontrar padrões.
-        </p>
-      </div>
-
-      <div className="stats-banner">
-        <div className="stat">
-          <span className="stat-num">{all.length}</span>
-          <span className="stat-label">Estratégias</span>
+      <header className="browse-header">
+        <h1 className="browse-title">Browse Estratégias</h1>
+        <div className="browse-header-actions">
+          <button className="btn-secondary" onClick={refresh} title="Recarregar">⟳</button>
+          <Link to="/analyze" className="btn-primary">+ Novo Backtest</Link>
         </div>
-      </div>
+      </header>
 
-      <FiltersBar filters={filters} onChange={setFilters} />
+      <FiltersBar current={filters} onChange={setFilters} onClear={clearFilters} />
 
-      {all.length === 0 ? (
-        <div className="loading" style={{ marginTop: "2rem" }}>
-          Carregando estratégias...
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="empty" style={{ marginTop: "2rem" }}>
-          Nenhuma estratégia encontrada com estes filtros.
-        </div>
-      ) : (
-        <div className="grid">
+      <section className="browse-results" aria-label="Resultados">
+        <p className="result-count">{filtered.length} estratégia(s) encontrada(s)</p>
+        <div className="strategy-grid">
           {filtered.map((s) => (
             <StrategyCard key={s.id} strategy={s} />
           ))}
         </div>
-      )}
+      </section>
+
+      <BacktestRunner onRun={() => {}} />
     </div>
   );
 }

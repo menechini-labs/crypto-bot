@@ -1,79 +1,55 @@
-import type { StrategyResult } from "./data";
+import type { Strategy } from "./types";
 import Sparkline from "./Sparkline";
+import { Link } from "react-router-dom";
 
 interface Props {
-  strategy: StrategyResult;
+  strategy: Strategy;
 }
 
-function fmtPct(v: number): string {
-  return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
-}
-
-function fmtNum(v: number, d = 2): string {
-  return v.toFixed(d);
-}
-
-/**
- * Card de estratégia – réplica do design StrategyFactory.
- */
 export default function StrategyCard({ strategy }: Props) {
-  const { name, symbol, timeframe, author, netProfitPct } = strategy;
-  const pf = strategy.profitFactor;
-  const lr = strategy;
-
-  const netClass = netProfitPct >= 0 ? "kpi-v up" : "kpi-v down";
+  const pnlClass = strategy.netProfitPct >= 0 ? "up" : "down";
+  const analyzeLink = `/analyze?symbol=${strategy.symbol}&strategy=${strategy.id}`;
 
   return (
-    <div className="strat-card">
-      <div className="strat-card-head">
-        <div className="strat-card-name">{name}</div>
-        <div className="strat-card-meta">
-          <span className="sym">{symbol}</span>
-          <span className="tf">{timeframe}</span>
+    <div className="strategy-card">
+      <div className="card-header">
+        <h3 className="card-name">{strategy.name}</h3>
+        <span className="card-badge">{strategy.symbol}</span>
+      </div>
+
+      <div className="card-meta">
+        <span>{strategy.author}</span>
+        <span>{strategy.timeframe}</span>
+      </div>
+
+      <Sparkline points={strategy.equityCurve} width={280} height={60} />
+
+      <div className="card-stats">
+        <div>
+          <small>PnL</small>
+          <span className={pnlClass}>{strategy.netProfitPct >= 0 ? "+" : ""}{strategy.netProfitPct}%</span>
+        </div>
+        <div>
+          <small>Drawdown</small>
+          <span>{strategy.maxDrawdownPct}%</span>
+        </div>
+        <div>
+          <small>Sharpe</small>
+          <span>{strategy.sharpeRatio.toFixed(2)}</span>
+        </div>
+        <div>
+          <small>Win Rate</small>
+          <span>{strategy.winRatePct}%</span>
         </div>
       </div>
 
-      <Sparkline points={strategy.equityCurve} />
-
-      <div className="kpis">
-        <div className="kpi">
-          <span className="kpi-l">Net Profit</span>
-          <span className={netClass}>{fmtPct(netProfitPct)}</span>
-        </div>
-        <div className="kpi">
-          <span className="kpi-l">PF</span>
-          <span className="kpi-v">{pf != null ? fmtNum(pf) : "∞"}</span>
-        </div>
-        <div className="kpi">
-          <span className="kpi-l">Max DD</span>
-          <span className="kpi-v">{fmtPct(lr.maxDrawdownPct)}</span>
-        </div>
-        <div className="kpi">
-          <span className="kpi-l">Win Rate</span>
-          <span className="kpi-v">{fmtNum(lr.winRatePct, 0)}%</span>
-        </div>
-        <div className="kpi">
-          <span className="kpi-l">Sharpe</span>
-          <span className="kpi-v">{fmtNum(lr.sharpeRatio)}</span>
-        </div>
-        <div className="kpi">
-          <span className="kpi-l">Sortino</span>
-          <span className="kpi-v">{fmtNum(lr.sortinoRatio)}</span>
-        </div>
-        <div className="kpi">
-          <span className="kpi-l">Trades</span>
-          <span className="kpi-v">{lr.totalTrades}</span>
-        </div>
-      </div>
-
-      <div className="strat-card-foot">
-        <div className="strat-card-author">
-          <span className="ava">{(author[0] || "A").toUpperCase()}</span>
-          <span className="name">@{author}</span>
-        </div>
-        <div className="badge-container">
-          <span className="badge badge-fork">Fork</span>
-        </div>
+      <div className="card-footer">
+        <Link to={analyzeLink} className="btn-primary analyze-link">
+          🔍 Analyze
+        </Link>
+        <a href={strategy.forkUrl} className="btn-secondary fork-link" target="_blank" rel="noopener noreferrer">
+          Fork ↗
+        </a>
       </div>
     </div>
   );

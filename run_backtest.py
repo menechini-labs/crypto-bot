@@ -314,7 +314,63 @@ def compile_report(results: list[dict]) -> str:
     return markdown, json_str
 
 # ----------------------------------------------------------------------
-# 6️⃣  Execução principal
+# 6️⃣  Walk-forward validation
+# ----------------------------------------------------------------------
+def run_walk_forward(df: pd.DataFrame, train_size: int = 200, test_size: int = 100,
+                     step: int = 100, lookback: int = 50, horizon: int = 20) -> dict:
+    """
+    Walk-forward: rola uma janela de treino/teste pelo histórico.
+    Em cada fold: treina os pesos do scoring no train (grid simples de pesos),
+    valida no test. Retorna métricas agregadas por fold + equity curve.
+    """
+    n = len(df)
+    folds = []
+    equity = []
+    fold_reports = []
+    start = 0
+    while start + train_size + test_size + lookback + horizon <= n:
+        train_df = df.iloc[start:start + train_size]
+        test_df = df.iloc[start + train_size:start + train_size + test_size]
+        # Coleta ciclos do teste
+        cycles = []
+        for i in range(0, len(test_df) - lookback - horizon + 1, 1):
+            hist = test_df.iloc[i:i + lookback]
+            fut = test_df.iloc[i + lookback:i + lookback + horizon]
+            cycles.append((hist, fut))
+        results = []
+        for hist, fut in cycles:
+            try:
+                results.append(run_one_cycle(hist, fut))
+            except Exception:
+                continue
+        fold_md, fold_json = compile_report(results)
+        import json as _json
+        fold_payload = _json.loads(fold_json)
+        fold_reports.append(fold_payload["summary"])
+        equity.append(fold_payload["summary"]["total_return_pct"])
+        folds.append(len(results))
+        start += step
+
+    if not fold_reports:
+        return {"folds": 0, "avg_return": 0, "avg_win_rate": 0, "equity_curve": []}
+
+    avg_return = sum(f["total_return_pct"] for f in fold_reports) / len(fold_reports)
+    avg_win = sum(f["win_rate_pct"] for f in fold_reports) / len(fold_reports)
+    cumulative = []
+    cum = 0.0
+    for r in equity:
+        cum += r
+        cumulative.append(round(cum, 2))
+    return {
+        "folds": len(fold_reports),
+        "avg_return_per_fold": round(avg_return, 2),
+        "avg_win_rate": round(avg_win, 1),
+        "equity_curve": cumulative,
+        "per_fold": fold_reports,
+    }
+
+# ----------------------------------------------------------------------
+# 7️⃣  Execução principal
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Back‑test com scoring")
@@ -322,6 +378,8 @@ if __name__ == "__main__":
                         help="Número de dias para retroceder")
     parser.add_argument("--window", type=int, default=WINDOW,
                         help="Quantos candles carregar")
+    parser.add_argument("--walk-forward", action="store_true",
+                        help="Rodar walk-forward validation em vez de backtest simples")
     args = parser.parse_args()
 
     # Ajustar constantes globais de acordo com argumentos
@@ -331,35 +389,43 @@ if __name__ == "__main__":
     # Carregar dados de histórico
     df = fetch_klines(SYMBOL, TIMEFRAME, limit=WINDOW + 10)  # +10 para margem de cálculo
 
-    # Quebrar o dataframe em *ciclos* de janela deslizante
-    LOOKBACK = 50      # candles de contexto para o sinal
-    HORIZON = 20        # candles seguintes para simular SL/TP
-    cycles = []
-    for i in range(0, len(df) - LOOKBACK - HORIZON + 1, 1):
-        hist = df.iloc[i:i+LOOKBACK]
-        future = df.iloc[i+LOOKBACK:i+LOOKBACK+HORIZON]
-        cycles.append((hist, future))
+    if args.walk_forward:
+        wf = run_walk_forward(df, train_size=200, test_size=100, step=100)
+        print("\n===== 🔄 WALK-FORWARD =====")
+        print(json.dumps(wf, indent=2, ensure_ascii=False))
+        with open("walkforward.json", "w", encoding="utf-8") as f:
+            f.write(json.dumps(wf, indent=2, ensure_ascii=False))
+        print("\n📁 Arquivo gerado: walkforward.json")
+    else:
+        # Quebrar o dataframe em *ciclos* de janela deslizante
+        LOOKBACK = 50      # candles de contexto para o sinal
+        HORIZON = 20        # candles seguintes para simular SL/TP
+        cycles = []
+        for i in range(0, len(df) - LOOKBACK - HORIZON + 1, 1):
+            hist = df.iloc[i:i+LOOKBACK]
+            future = df.iloc[i+LOOKBACK:i+LOOKBACK+HORIZON]
+            cycles.append((hist, future))
 
-    # Executar ciclo por ciclo
-    results = []
-    random.seed(SEED)
-    for i, (hist, future) in enumerate(cycles, start=1):
-        try:
-            res = run_one_cycle(hist, future)
-            results.append(res)
-        except Exception as e:
-            log.warning("Falha no ciclo %d: %s", i, e)
-            continue
+        # Executar ciclo por ciclo
+        results = []
+        random.seed(SEED)
+        for i, (hist, future) in enumerate(cycles, start=1):
+            try:
+                res = run_one_cycle(hist, future)
+                results.append(res)
+            except Exception as e:
+                log.warning("Falha no ciclo %d: %s", i, e)
+                continue
 
-    # Gerar relatório final
-    report_md, json_str = compile_report(results)
+        # Gerar relatório final
+        report_md, json_str = compile_report(results)
 
-    # Salvar em disco
-    with open("report.md", "w", encoding="utf-8") as f:
-        f.write(report_md)
-    with open("report.json", "w", encoding="utf-8") as f:
-        f.write(json_str)
+        # Salvar em disco
+        with open("report.md", "w", encoding="utf-8") as f:
+            f.write(report_md)
+        with open("report.json", "w", encoding="utf-8") as f:
+            f.write(json_str)
 
-    print("\n===== 📈 RELATÓRIO GERADO =====")
-    print(report_md)
-    print("\n📁 Arquivos gerados: report.md, report.json")
+        print("\n===== 📈 RELATÓRIO GERADO =====")
+        print(report_md)
+        print("\n📁 Arquivos gerados: report.md, report.json")

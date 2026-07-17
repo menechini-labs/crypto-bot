@@ -23,7 +23,6 @@ from core.wallet import PaperWallet
 from core.risk import RiskManager
 from core.execution import PaperExecutor
 from core.reporter import append_equity, load_history
-from core.dashboard import EquityServer
 
 STRATEGY_DEFAULT = "grid"
 EQUITY_PATH = os.path.join(ROOT, "data", "equity.json")
@@ -151,8 +150,14 @@ def main():
         for rec in hist[-10:]:
             print(f"ciclo {rec['cycle']}: equity ${rec['equity']:.2f} | PnL ${rec['pnl']:.2f}")
     elif args.mode == "dashboard":
-        srv = EquityServer(EQUITY_PATH, port=8000)
-        srv.serve_forever()
+        try:
+            import uvicorn
+        except ImportError:
+            print("Instale dependencias: pip install 'uvicorn[standard]'", file=sys.stderr)
+            sys.exit(1)
+        from core.strategy_api import app
+        print(f"=== Servidor unificado (API + Frontend) em http://localhost:8000 ===")
+        uvicorn.run(app, host="localhost", port=8000, log_level="info")
     else:
         print("Modo contínuo (Ctrl+C para parar). Paper only, sem risco real.")
         try:

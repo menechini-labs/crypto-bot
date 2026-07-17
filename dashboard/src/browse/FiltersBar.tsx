@@ -13,7 +13,7 @@ export default function FiltersBar({ current, onChange, onClear }: Props) {
   };
 
   return (
-    <div className="filters-bar" role="search" aria-label="Filtros de estratégias">
+    <div className="filters" role="search" aria-label="Filtros de estratégias">
       <label>
         <span>Símbolo</span>
         <select value={String(current.symbol || "")} onChange={(e) => set("symbol", e.target.value)}>

@@ -1,11 +1,11 @@
 <p align="center">
-  <img alt="CryptoBot" src="https://via.placeholder.com/350x150?text=CryptoBot+Paper" width="350px">
+  <img alt="CryptoBot" src="https://img.shields.io/badge/crypto--bot-paper%20trading-111418?style=for-the-badge&logo=bitcoin&logoColor=%23f59e0b" width="320px">
 </p>
 
-<h1 align="center">🤖 crypto-bot</h1>
+<h1 align="center">crypto-bot</h1>
 
 <p align="center">
-  <strong>Paper trading bot for cryptocurrency strategies — spot only, zero risk, full learning</strong>
+  <strong>A paper trading bot for cryptocurrency strategies — spot only, zero risk, full learning</strong>
 </p>
 
 <p align="center">
@@ -19,6 +19,7 @@
 <p align="center">
   <a href="#overview">Overview</a> •
   <a href="#features">Features</a> •
+  <a href="#how-it-works">How It Works</a> •
   <a href="#architecture">Architecture</a> •
   <a href="#installation--usage">Installation & Usage</a> •
   <a href="#configuration">Configuration</a> •
@@ -27,7 +28,8 @@
   <a href="#risk--security">Risk & Security</a> •
   <a href="#project-structure">Project Structure</a> •
   <a href="#running-tests">Running Tests</a> •
-  <a href="#code-quality">Code Quality</a>
+  <a href="#code-quality">Code Quality</a> •
+  <a href="#specifications">Specifications</a>
 </p>
 
 ---
@@ -38,7 +40,7 @@ crypto-bot is a **paper trading bot** for cryptocurrency strategies — **spot o
 
 The purpose is to **learn the system**: data collection, technical indicators, strategy logic, simulated portfolio, risk management, and performance metrics — without risking real capital. It is a laboratory for strategy development with instant visual feedback.
 
-Built with **stdlib-first** philosophy: core modules (indicators, backtest, config, HTTP server) use zero external dependencies. The frontend is a self-contained React SPA (Vite + TypeScript), and the unified API server runs on FastAPI.
+Built with a **stdlib-first** philosophy: core modules (indicators, backtest, config, HTTP server) use zero external dependencies. The frontend is a self-contained React SPA (Vite + TypeScript), and the unified API server runs on FastAPI.
 
 ### What's inside
 
@@ -52,7 +54,7 @@ Built with **stdlib-first** philosophy: core modules (indicators, backtest, conf
 | **Backtest Engine** | Candle-by-candle simulation with zero look-ahead |
 | **Risk Manager** | Stop-loss, take-profit, position sizing per trade |
 | **Synthetic Series** | Deterministic price series (sideways/uptrend/downtrend) for controlled testing |
-| **React Dashboard** | Live equity chart (SVG), stat cards, auto-refresh (5s), strategy browser |
+| **React Dashboard** | Live equity chart (SVG), stat cards, auto-refresh, strategy browser |
 | **FastAPI + Frontend** | Unified server serving API endpoints and React SPA on a single port |
 | **Agent Analysis** | Post-backtest reflection engine: trade patterns, insights, recommendations |
 | **Safety Guards** | Double-locked executor: paper-only by default, live requires explicit env var |
@@ -120,6 +122,23 @@ downtrend → combined
 - **JSON corruption safety**: `reporter.py` gracefully handles corrupted equity files, restarting from empty state
 - **No credentials stored**: Market data endpoint is hardcoded and public — zero API keys, zero secrets
 
+## How It Works
+
+crypto-bot runs in **cycles**. Each cycle is a self-contained decision loop with clear, observable stages:
+
+```
+1. LOAD      config.yaml → parameters (symbols, strategy, risk limits)
+2. FETCH     Binance public REST API → latest OHLCV candles
+3. COMPUTE   indicators (SMA/EMA/RSI/MACD/Bollinger) + regime classification
+4. DECIDE    strategy selects BUY / SELL / HOLD using only past data (no look-ahead)
+5. VALIDATE  risk manager checks stop-loss / take-profit / position size
+6. EXECUTE   paper wallet applies fill + fee (no network call)
+7. RECORD    reporter persists updated equity to data/equity.json
+8. REFLECT   (backtest) agent analyzer classifies result + generates insights
+```
+
+The same loop powers both **live paper mode** (`--mode continuous`) and **backtest mode** (`/api/backtest`) — backtest simply feeds a synthetic or historical candle series instead of the live fetch. The dashboard reads the recorded equity history and renders it in real time.
+
 ## Architecture
 
 ### Data Flow
@@ -176,7 +195,7 @@ dashboard / API  →  FastAPI serves data + React SPA on :8000
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/crypto-bot.git
+git clone https://github.com/menechini-labs/crypto-bot.git
 cd crypto-bot
 
 # Install Python dependencies
@@ -279,6 +298,7 @@ The `regime.py` module classifies market conditions via linear regression slope 
 |--------|------|-------------|
 | GET | `/api/strategies` | List mock strategies with filters (symbol, timeframe, Sharpe, drawdown, etc.) |
 | GET | `/api/strategies/{id}` | Single strategy detail |
+| GET | `/api/strategies/{id}/fork.json` | Download strategy config as JSON |
 | GET | `/api/stats` | Aggregate stats (total strategies, avg PnL/Sharpe) |
 | POST | `/api/backtest` | Run synthetic backtest with configurable regime, strategy, candles, seed |
 | GET | `/api/backtest/{id}` | Retrieve cached backtest report + analysis |
@@ -357,11 +377,11 @@ crypto-bot/
 ├── dashboard/                # React frontend (Vite + TypeScript)
 │   ├── src/
 │   │   ├── main.tsx          # React entrypoint
-│   │   ├── Dashboard.tsx     # Main dashboard (equity chart, stats)
+│   │   ├── Dashboard.tsx      # Main dashboard (equity chart, stats)
 │   │   ├── EquityChart.tsx   # SVG area chart (pure, no chart libs)
-│   │   ├── StatCard.tsx      # Metric card component
-│   │   ├── types.ts          # Shared TypeScript types
-│   │   ├── index.css         # Dark terminal-inspired theme
+│   │   ├── StatCard.tsx       # Metric card component
+│   │   ├── types.ts           # Shared TypeScript types
+│   │   ├── index.css          # Dark terminal-inspired theme
 │   │   │
 │   │   └── browse/           # Strategy browser & backtest UI
 │   │       ├── api.ts            # API client (fetch-based)
@@ -442,3 +462,21 @@ The project uses [pre-commit](https://pre-commit.com/) with hooks for Ruff (lint
 pip install pre-commit ruff pyright vulture safety
 pre-commit install
 ```
+
+## Specifications
+
+Design constraints and guarantees that shape crypto-bot:
+
+| Constraint | Guarantee |
+|------------|-----------|
+| **Paper-only** | No code path places a real order; live mode is blocked by default |
+| **Stdlib-first** | Core domain logic (indicators, backtest, wallet, risk) imports zero third-party packages |
+| **Zero look-ahead** | Backtest decisions at step `t` use only `closes[0..t]` |
+| **Deterministic** | Same parameters → same result (no RNG in the core loop) |
+| **No secrets** | Only public Binance endpoints are used; no API keys, no `.env` required |
+| **Resilient loop** | Network/JSON failures are logged and skipped — the cycle never crashes |
+| **Observable** | Every cycle persists equity to `data/equity.json` for live dashboard rendering |
+
+## License
+
+[MIT](LICENSE) — free for learning, experimentation, and extension. Not financial advice.

@@ -4,7 +4,9 @@ import os
 
 def load_config(path: str = None) -> dict:
     if path is None:
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
+        # config.yaml fica na raiz do projeto (um nivel acima de core/)
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        path = os.path.join(root, "config.yaml")
     if not os.path.exists(path):
         raise FileNotFoundError(path)
     cfg: dict = {}

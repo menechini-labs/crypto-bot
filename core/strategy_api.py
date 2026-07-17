@@ -25,9 +25,46 @@ except ImportError:
 from core.agent_analyzer import analyze_backtest
 from core.reflection import load_reflections as _load_reflections
 from core.reflection import reflect_trades, save_reflection
+from core.strategy_registry.registry import get_all as _registry_get_all
+from core import market as _market
+from core import indicators as _ind
+from core.scoring import score_signal as _score_signal, detect_regime as _detect_regime
 
 logger = logging.getLogger("crypto-bot")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+# ---------------------------------------------------------------------------
+# Observability counters (Phase 0)
+# ---------------------------------------------------------------------------
+
+_METRICS: dict[str, int] = {
+    "signals_scored": 0,
+    "llm_calls": 0,
+    "llm_errors": 0,
+    "backtests_run": 0,
+    "orders_paper": 0,
+    "risk_rejections": 0,
+}
+
+# In-memory caches (Phase 0/1)
+_KLINES_CACHE: dict[str, tuple[float, list[float]]] = {}
+_KLINES_TTL = 5.0
+_INDICES_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_INDICES_TTL = 60.0
+
+
+def _cached_closes(symbol: str, tf: str, limit: int) -> list[float]:
+    """Fetch closes from Binance public klines with short TTL cache."""
+    import time
+    key = f"{symbol}|{tf}|{limit}"
+    now = time.time()
+    cached = _KLINES_CACHE.get(key)
+    if cached and now - cached[0] < _KLINES_TTL:
+        return cached[1]
+    candles = _market.fetch_ohlcv(symbol, tf, limit)
+    closes = [float(c["close"]) for c in candles]
+    _KLINES_CACHE[key] = (now, closes)
+    return closes
 
 # ---------------------------------------------------------------------------
 # App
@@ -48,59 +85,35 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# Estratégias mock
+# Estratégias — derivadas do registry real (Phase 0: sem PnL fake)
 # ---------------------------------------------------------------------------
 
-STRATEGIES_MOCK: list[dict[str, Any]] = [
-    {
-        "id": "grid_static_btc",
-        "name": "Grid Static BTC",
-        "symbol": "BTCUSDT",
-        "timeframe": "1h",
-        "author": "Eduardo S.",
-        "netProfitPct": 8.45,
-        "profitFactor": 1.42,
-        "maxDrawdownPct": 12.3,
-        "winRatePct": 61.8,
-        "sharpeRatio": 1.12,
-        "sortinoRatio": 1.62,
-        "totalTrades": 127,
-        "equityCurve": [1.0, 1.02, 1.05, 1.03, 1.08, 1.06, 1.12, 1.15, 1.13, 1.18],
-        "forkUrl": "/api/strategies/grid_static_btc/fork.json",
-    },
-    {
-        "id": "grid_dynamic_eth",
-        "name": "Grid Dynamic ETH",
-        "symbol": "ETHUSDT",
-        "timeframe": "4h",
-        "author": "CryptoWhale",
-        "netProfitPct": 15.2,
-        "profitFactor": 1.87,
-        "maxDrawdownPct": 8.9,
-        "winRatePct": 68.5,
-        "sharpeRatio": 1.45,
-        "sortinoRatio": 2.12,
-        "totalTrades": 89,
-        "equityCurve": [1.0, 1.03, 1.07, 1.05, 1.12, 1.10, 1.18, 1.22, 1.20, 1.25],
-        "forkUrl": "/api/strategies/grid_dynamic_eth/fork.json",
-    },
-    {
-        "id": "trend_follow_sol",
-        "name": "Trend Follow SOL",
-        "symbol": "SOLUSDT",
-        "timeframe": "1h",
-        "author": "QuantBrasil",
-        "netProfitPct": -5.2,
-        "profitFactor": 0.89,
-        "maxDrawdownPct": 28.7,
-        "winRatePct": 42.3,
-        "sharpeRatio": -0.34,
-        "sortinoRatio": -0.48,
-        "totalTrades": 156,
-        "equityCurve": [1.0, 0.98, 0.95, 0.92, 0.90, 0.88, 0.85, 0.82, 0.80, 0.78],
-        "forkUrl": "/api/strategies/trend_follow_sol/fork.json",
-    },
-]
+def _build_strategies_from_registry() -> list[dict[str, Any]]:
+    """Constrói metadados de estratégias a partir do registry real.
+
+    Sem números de PnL inventados: hasBacktest=false até rodar backtest.
+    """
+    reg = _registry_get_all()
+    out: list[dict[str, Any]] = []
+    for name in sorted(reg.keys()):
+        out.append({
+            "id": name,
+            "name": name.replace("_", " ").title(),
+            "symbol": "BTCUSDT",
+            "timeframe": "1h",
+            "author": "core",
+            "netProfitPct": None,
+            "profitFactor": None,
+            "maxDrawdownPct": None,
+            "winRatePct": None,
+            "sharpeRatio": None,
+            "sortinoRatio": None,
+            "totalTrades": None,
+            "equityCurve": [],
+            "forkUrl": "",
+            "hasBacktest": False,
+        })
+    return out
 
 _VALID_STRATEGIES = frozenset({"grid", "grid_dynamic", "combined", "baseline", "default", "llm"})
 _VALID_REGIMES = frozenset({"lateral", "uptrend", "downtrend"})
@@ -120,17 +133,17 @@ async def list_strategies(
     author: str | None = Query(None),
 ) -> JSONResponse:
     logger.info("list_strategies symbol=%s timeframe=%s", symbol, timeframe)
-    results = STRATEGIES_MOCK
+    results = _build_strategies_from_registry()
     if symbol:
         results = [s for s in results if s["symbol"] == symbol]
     if timeframe:
         results = [s for s in results if s["timeframe"] == timeframe]
     if minPnl is not None:
-        results = [s for s in results if s["netProfitPct"] >= minPnl]
+        results = [s for s in results if s["netProfitPct"] is not None and s["netProfitPct"] >= minPnl]
     if maxDd is not None:
-        results = [s for s in results if s["maxDrawdownPct"] <= maxDd]
+        results = [s for s in results if s["maxDrawdownPct"] is not None and s["maxDrawdownPct"] <= maxDd]
     if minSharpe is not None:
-        results = [s for s in results if s["sharpeRatio"] >= minSharpe]
+        results = [s for s in results if s["sharpeRatio"] is not None and s["sharpeRatio"] >= minSharpe]
     if author:
         results = [s for s in results if s["author"] == author]
     return JSONResponse(results)
@@ -138,15 +151,7 @@ async def list_strategies(
 
 @app.get("/api/strategies/{strategy_id}")
 async def get_strategy(strategy_id: str) -> dict[str, Any] | None:
-    for s in STRATEGIES_MOCK:
-        if s["id"] == strategy_id:
-            return s
-    return None
-
-
-@app.get("/api/strategies/{strategy_id}/fork.json")
-async def fork_strategy(strategy_id: str) -> dict[str, Any] | None:
-    for s in STRATEGIES_MOCK:
+    for s in _build_strategies_from_registry():
         if s["id"] == strategy_id:
             return s
     return None
@@ -155,13 +160,12 @@ async def fork_strategy(strategy_id: str) -> dict[str, Any] | None:
 @app.get("/api/stats")
 async def get_stats() -> dict[str, Any]:
     logger.info("get_stats")
-    total = len(STRATEGIES_MOCK)
-    avg_pnl = sum(s["netProfitPct"] for s in STRATEGIES_MOCK) / total if total else 0
-    avg_sharpe = sum(s["sharpeRatio"] for s in STRATEGIES_MOCK) / total if total else 0
+    reg = _build_strategies_from_registry()
+    total = len(reg)
     return {
         "totalStrategies": total,
-        "averagePnL": round(avg_pnl, 2),
-        "averageSharpe": round(avg_sharpe, 2),
+        "averagePnL": None,
+        "averageSharpe": None,
         "timestamp": datetime.now(UTC).isoformat(),
     }
 

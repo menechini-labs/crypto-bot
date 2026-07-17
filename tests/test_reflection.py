@@ -198,7 +198,8 @@ class TestReflectionPersistence:
             assert loaded[0]["total_trades"] == 2
 
     def test_load_empty_no_file(self) -> None:
-        assert load_reflections() == []
+        with patch("core.reflection._REFLECTIONS_FILE", self.tmp):
+            assert load_reflections() == []
 
     def test_preserves_multiple_reflections(self) -> None:
         with patch("core.reflection._REFLECTIONS_FILE", self.tmp):

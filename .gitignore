@@ -28,3 +28,7 @@ dashboard/node_modules/
 # Tooling artifacts
 .playwright-mcp/
 .sisyphus/
+
+# Build / test artifacts
+dashboard/test-results/
+*.bak

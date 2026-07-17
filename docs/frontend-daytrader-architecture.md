@@ -99,7 +99,7 @@ Plus: **idempotency** (`request_id` + TTL), **trailing stop to break-even**, **A
 - `/api/market/overview`, `/api/indicators`, `/api/indices`.
 - Markets tab + Signals tab (live gauge feed).
 
-**Phase 2 — Agent Desk + News**
+**Phase 2 — Agent Desk + News** — **DONE (2026-07-17)** ver `frontend-phase2-plan.md`.
 - Agent orchestration module (Metrics/News/Risk/Strategy/DecisionCore) reusing `agent_analyzer` + new news agent.
 - `/api/agents/cycle`, `/api/news`. Agents + News tabs.
 

@@ -1,0 +1,50 @@
+{
+  "summary": {
+    "total_cycles": 61,
+    "holds": 61,
+    "winning_trades": 0,
+    "losing_trades": 0,
+    "total_return_pct": 0,
+    "average_return_pct": 0,
+    "win_rate_pct": 0,
+    "sharpe_approx": 0.0
+  },
+  "last_cycle": {
+    "trade": {
+      "action": "HOLD",
+      "entry": null,
+      "exit": null,
+      "pnl_pct": 0.0
+    },
+    "signal": "hold",
+    "score": {
+      "signal": "hold",
+      "confidence": 0.16,
+      "risk_score": 0.889,
+      "composite": 0.5,
+      "details": {
+        "components": {
+          "trend": 0.5,
+          "momentum": 0.5,
+          "volatility": 1.0,
+          "risk_reward": 0.667,
+          "regime": 1.0
+        },
+        "regime": "lateral",
+        "rsi": 43.5,
+        "volatility_pct": 0.34,
+        "risk_reward_ratio": 2.0,
+        "weights": {
+          "trend": 0.1,
+          "momentum": 0.2,
+          "volatility": 0.35,
+          "risk_reward": 0.25,
+          "regime": 0.1
+        }
+      }
+    },
+    "confidence": 0.16,
+    "risk_score": 0.889,
+    "composite": 0.5
+  }
+}

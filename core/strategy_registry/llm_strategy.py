@@ -15,31 +15,43 @@ from .prompts import get_prompt
 
 log = logging.getLogger(__name__)
 
-ENABLE_LLM = os.getenv("ENABLE_LLM", "0") == "1"
-LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
-LLM_MODEL = os.getenv("LLM_MODEL", "gpt-3.5-turbo")
-LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+
+def _is_enabled() -> bool:
+    return os.getenv("ENABLE_LLM", "0") == "1"
+
+
+def _api_key() -> str:
+    return os.getenv("LLM_API_KEY", "")
+
+
+def _base_url() -> str:
+    return os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
+
+
+def _model() -> str:
+    return os.getenv("LLM_MODEL", "gpt-3.5-turbo")
 
 
 def _llm_request(prompt: str, max_tokens: int = 256) -> str:
     """POST prompt to LLM chat endpoint (stdlib-only)."""
-    if not ENABLE_LLM:
+    if not _is_enabled():
         raise RuntimeError("LLM disabled (ENABLE_LLM=0)")
-    if not LLM_API_KEY:
+    api_key = _api_key()
+    if not api_key:
         raise ValueError("LLM_API_KEY not configured")
 
     headers = {
-        "Authorization": f"Bearer {LLM_API_KEY}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
     payload = {
-        "model": LLM_MODEL,
+        "model": _model(),
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": max_tokens,
         "temperature": 0.3,
     }
     req = urllib.request.Request(
-        LLM_BASE_URL.rstrip("/") + "/chat/completions",
+        _base_url().rstrip("/") + "/chat/completions",
         data=json.dumps(payload).encode(),
         headers=headers,
         method="POST",
@@ -77,7 +89,7 @@ class LLMStrategy(BaseStrategy):
     def decide(self, closes: list[float], has_position: bool, ctx: dict[str, Any] | None = None) -> str:
         """Decide signal + score. Returns 'buy'/'sell'/'hold'."""
         ctx = ctx or {}
-        if not ENABLE_LLM:
+        if not _is_enabled():
             log.warning("LLM disabled -> hold")
             return "hold"
         if len(closes) < 10:

@@ -15,6 +15,7 @@ Uso:  python3 run_backtest.py  [--days N]  [--window W]
 
 import argparse
 import json
+import os
 import random
 from datetime import datetime, timedelta
 
@@ -91,10 +92,11 @@ def fetch_klines(symbol: str, timeframe: str, limit: int = 500):
 # ----------------------------------------------------------------------
 # 4️⃣  Simulação de trade (entry/exit)
 # ----------------------------------------------------------------------
-def run_one_cycle(hist: pd.DataFrame, future: pd.DataFrame) -> dict:
+def run_one_cycle(hist: pd.DataFrame, future: pd.DataFrame, strategy=None) -> dict:
     """
     Processa *um* ciclo: `hist` são os candles de contexto (>=20),
     `future` são os candles seguintes para simular SL/TP.
+    `strategy` é o objeto com .decide(closes, has_position, ctx).
     Retorna o dicionário com todas as métricas da rodada.
     """
     # -------------------------------------------------
@@ -152,8 +154,9 @@ def run_one_cycle(hist: pd.DataFrame, future: pd.DataFrame) -> dict:
         ctx["volatility"] = 2.5
 
     # Instanciar a estratégia (a lógica já está pronta)
-    strat = TrendStrategy()
-    signal = strat.decide(closes, has_position=False, ctx=ctx)
+    if strategy is None:
+        strategy = TrendStrategy()
+    signal = strategy.decide(closes, has_position=False, ctx=ctx)
 
     # Score detalhado
     score = score_signal(closes, signal, has_position=False, ctx=ctx)
@@ -287,6 +290,8 @@ def compile_report(results: list[dict]) -> str:
     json_str = json.dumps(payload, indent=2, ensure_ascii=False)
 
     # Markdown header + table
+    total_trades = len(results) - hold_cnt
+    win_rate = (len(wins) / total_trades * 100) if total_trades else 0.0
     markdown = f"""\
 ## 📊 Relatório de Back‑test (Scoring)
 
@@ -297,8 +302,8 @@ def compile_report(results: list[dict]) -> str:
 ### Métricas Principais
 | Métrica | Valor |
 |--------|-------|
-| Ciclos Executados | {len(results)-hold_cnt} |
-| Win Rate | {len(wins)/(len(results)-hold_cnt)*100:.1f}% |
+| Ciclos Executados | {total_trades} |
+| Win Rate | {win_rate:.1f}% |
 | Return Total | {total_return:.2f}% |
 | Sharpe (aprox.) | {sharpe:.2f} |
 
@@ -317,7 +322,7 @@ def compile_report(results: list[dict]) -> str:
 # 6️⃣  Walk-forward validation
 # ----------------------------------------------------------------------
 def run_walk_forward(df: pd.DataFrame, train_size: int = 200, test_size: int = 100,
-                     step: int = 100, lookback: int = 50, horizon: int = 20) -> dict:
+                     step: int = 100, lookback: int = 50, horizon: int = 20, strategy=None) -> dict:
     """
     Walk-forward: rola uma janela de treino/teste pelo histórico.
     Em cada fold: treina os pesos do scoring no train (grid simples de pesos),
@@ -340,7 +345,7 @@ def run_walk_forward(df: pd.DataFrame, train_size: int = 200, test_size: int = 1
         results = []
         for hist, fut in cycles:
             try:
-                results.append(run_one_cycle(hist, fut))
+                results.append(run_one_cycle(hist, fut, strategy=strategy))
             except Exception:
                 continue
         fold_md, fold_json = compile_report(results)
@@ -378,9 +383,21 @@ if __name__ == "__main__":
                         help="Número de dias para retroceder")
     parser.add_argument("--window", type=int, default=WINDOW,
                         help="Quantos candles carregar")
+    parser.add_argument("--strategy", type=str, default="trend",
+                        choices=["trend", "llm"],
+                        help="Estrategia usada no backtest (trend=truzamento SMA, llm=LLMStrategy)")
     parser.add_argument("--walk-forward", action="store_true",
                         help="Rodar walk-forward validation em vez de backtest simples")
     args = parser.parse_args()
+
+    # Selecionar estrategia
+    if args.strategy == "llm":
+        if not os.getenv("ENABLE_LLM", "0") == "1":
+            log.warning("ENABLE_LLM nao esta '1' — LLMStrategy vai retornar hold. "
+                        "Exporte ENABLE_LLM=1 e LLM_API_KEY para usar LLM real.")
+        strategy = LLMStrategy()
+    else:
+        strategy = TrendStrategy()
 
     # Ajustar constantes globais de acordo com argumentos
     START_DAYS = args.days
@@ -390,7 +407,7 @@ if __name__ == "__main__":
     df = fetch_klines(SYMBOL, TIMEFRAME, limit=WINDOW + 10)  # +10 para margem de cálculo
 
     if args.walk_forward:
-        wf = run_walk_forward(df, train_size=200, test_size=100, step=100)
+        wf = run_walk_forward(df, train_size=200, test_size=100, step=100, strategy=strategy)
         print("\n===== 🔄 WALK-FORWARD =====")
         print(json.dumps(wf, indent=2, ensure_ascii=False))
         with open("walkforward.json", "w", encoding="utf-8") as f:
@@ -411,7 +428,7 @@ if __name__ == "__main__":
         random.seed(SEED)
         for i, (hist, future) in enumerate(cycles, start=1):
             try:
-                res = run_one_cycle(hist, future)
+                res = run_one_cycle(hist, future, strategy=strategy)
                 results.append(res)
             except Exception as e:
                 log.warning("Falha no ciclo %d: %s", i, e)

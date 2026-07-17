@@ -88,6 +88,25 @@ def run_cycle(cfg: dict, wallet: PaperWallet | None = None) -> PaperWallet:
         signal = _signal_for(strategy, closes, grid_levels, has_position)
         entry = wallet.positions.get(symbol, {}).get("avg_price")
 
+        # Gate de scoring: mesmo criterio do backtest (confianca>=0.4, risco>=0.5)
+        use_scoring = cfg.get("use_scoring", True)
+        if use_scoring and signal == "buy" and not has_position:
+            try:
+                from core.scoring import score_signal, should_execute
+                sctx = {
+                    "symbol": symbol,
+                    "regime": cfg.get("regime", "lateral"),
+                    "volatility": cfg.get("volatility", 2.5),
+                    "sl_pct": cfg["stop_loss_pct"] * 100,
+                    "tp_pct": cfg["take_profit_pct"] * 100,
+                }
+                _score = score_signal(closes, "buy", has_position=False, ctx=sctx)
+                if not should_execute(_score, min_confidence=0.4, min_risk=0.5):
+                    print(f"{symbol}: BUY rejeitado pelo scoring (conf={_score.confidence:.2f} risk={_score.risk_score:.2f})")
+                    signal = "hold"
+            except Exception as e:
+                print(f"[warn] {symbol}: scoring indisponivel ({e}); seguindo sem gate.")
+
         if has_position and entry:
             if risk.should_stop_loss(entry, last_price):
                 executor.execute_sell(symbol, last_price)

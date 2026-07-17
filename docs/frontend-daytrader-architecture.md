@@ -103,7 +103,7 @@ Plus: **idempotency** (`request_id` + TTL), **trailing stop to break-even**, **A
 - Agent orchestration module (Metrics/News/Risk/Strategy/DecisionCore) reusing `agent_analyzer` + new news agent.
 - `/api/agents/cycle`, `/api/news`. Agents + News tabs.
 
-**Phase 3 — Trade Desk (paper)**
+**Phase 3 — Trade Desk (paper)** — **DONE (2026-07-17)** ver `frontend-phase3-plan.md`.
 - `core/risk.py` ordered gate + idempotency + trailing stop.
 - `/api/positions`, `/api/orders`, `/api/risk/state`. Trade Desk UI.
 

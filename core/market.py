@@ -9,8 +9,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 
 import json
-import urllib.request
 import urllib.error
+import urllib.request
 
 
 def fetch_ohlcv(symbol: str, timeframe: str = "1h", limit: int = 100) -> list[dict]:

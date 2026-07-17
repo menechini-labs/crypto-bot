@@ -12,9 +12,8 @@ logger = logging.getLogger("crypto-bot")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 
-import json
-import os
 import mimetypes
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 DEFAULT_PORT = 8000
@@ -36,7 +35,7 @@ def build_handler(equity_path: str, static_dir: str = DEFAULT_STATIC):
     def handler(path: str):
         if path == "/equity":
             if os.path.exists(equity_path):
-                with open(equity_path, "r", encoding="utf-8") as f:
+                with open(equity_path, encoding="utf-8") as f:
                     data = f.read()
             else:
                 data = "[]"

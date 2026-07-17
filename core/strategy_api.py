@@ -10,10 +10,10 @@ import logging
 import mimetypes
 import os
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 
@@ -22,8 +22,9 @@ try:
 except ImportError:
     uvicorn = None  # type: ignore[assignment]
 
-from core.agent_analyzer import AnalysisResult, analyze_backtest
-from core.reflection import reflect_trades, save_reflection, load_reflections as _load_reflections
+from core.agent_analyzer import analyze_backtest
+from core.reflection import load_reflections as _load_reflections
+from core.reflection import reflect_trades, save_reflection
 
 logger = logging.getLogger("crypto-bot")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -101,7 +102,7 @@ STRATEGIES_MOCK: list[dict[str, Any]] = [
     },
 ]
 
-_VALID_STRATEGIES = frozenset({"grid", "grid_dynamic", "combined", "baseline", "default"})
+_VALID_STRATEGIES = frozenset({"grid", "grid_dynamic", "combined", "baseline", "default", "llm"})
 _VALID_REGIMES = frozenset({"lateral", "uptrend", "downtrend"})
 
 # ---------------------------------------------------------------------------
@@ -161,7 +162,7 @@ async def get_stats() -> dict[str, Any]:
         "totalStrategies": total,
         "averagePnL": round(avg_pnl, 2),
         "averageSharpe": round(avg_sharpe, 2),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -174,6 +175,79 @@ _BACKTEST_CACHE: dict[str, dict[str, Any]] = {}
 
 def _bt_id(symbol: str, strategy: str, regime: str, seed: int) -> str:
     return f"{symbol.replace('/', '_')}_{strategy}_{regime}_{seed}"
+
+
+@app.post("/api/score")
+async def api_score(payload: dict[str, Any]) -> dict[str, Any]:
+    """Calcula o scoring de um sinal dado um histórico de closes.
+
+    Body: {
+      "closes": [float, ...],   # obrigatório (>= 20)
+      "signal": "buy"|"sell"|"hold",
+      "has_position": bool,
+      "ctx": { ... }            # opcional (symbol, regime, volatility, sl_pct, tp_pct)
+    }
+    Retorna o SignalScore serializado (confiança, risco, composite, componentes).
+    """
+    logger.info("api_score signal=%s closes=%d", payload.get("signal"), len(payload.get("closes", [])))
+    from core.scoring import score_signal, explain_score
+
+    closes = payload.get("closes")
+    if not isinstance(closes, list) or len(closes) < 20:
+        raise HTTPException(422, "closes deve ser lista com >= 20 valores")
+    signal = payload.get("signal", "hold")
+    if signal not in ("buy", "sell", "hold"):
+        raise HTTPException(422, "signal deve ser buy|sell|hold")
+    has_position = bool(payload.get("has_position", False))
+    ctx = payload.get("ctx") or {
+        "symbol": "BTCUSDT",
+        "regime": "lateral",
+        "volatility": 2.5,
+        "sl_pct": 5.0,
+        "tp_pct": 10.0,
+    }
+    score = score_signal([float(c) for c in closes], signal, has_position, ctx)
+    return {
+        "status": "ok",
+        "signal": signal,
+        "score": score.__dict__,
+        "explanation": explain_score(score),
+    }
+
+
+@app.post("/api/llm-signal")
+async def api_llm_signal(payload: dict[str, Any]) -> dict[str, Any]:
+    """Roda LLMStrategy.decide sobre um histórico e retorna sinal + score.
+
+    Body: { "closes": [float,...] (>=20), "has_position": bool, "ctx": {...} }
+    Requer ENABLE_LLM=1 e LLM_API_KEY; sem isso retorna fallback 'hold' com aviso.
+    """
+    logger.info("api_llm_signal closes=%d", len(payload.get("closes", [])))
+    from core.scoring import score_signal, explain_score
+    from core.strategy_registry.llm_strategy import LLMStrategy, _is_enabled
+
+    closes = payload.get("closes")
+    if not isinstance(closes, list) or len(closes) < 20:
+        raise HTTPException(422, "closes deve ser lista com >= 20 valores")
+    has_position = bool(payload.get("has_position", False))
+    ctx = payload.get("ctx") or {
+        "symbol": "BTCUSDT",
+        "regime": "lateral",
+        "volatility": 2.5,
+        "sl_pct": 5.0,
+        "tp_pct": 10.0,
+    }
+    strat = LLMStrategy()
+    signal = strat.decide([float(c) for c in closes], has_position, ctx=ctx)
+    enabled = _is_enabled()
+    score = score_signal([float(c) for c in closes], signal, has_position, ctx)
+    return {
+        "status": "ok",
+        "llm_enabled": enabled,
+        "signal": signal,
+        "score": score.__dict__,
+        "explanation": explain_score(score),
+    }
 
 
 @app.post("/api/backtest")
@@ -206,7 +280,19 @@ async def api_backtest(payload: dict[str, Any]) -> dict[str, Any]:
 
     cfg = load_config()
     closes = make_series(regime=regime, n=n, seed=seed)
-    raw = _run(closes, cfg, symbol=symbol, strategy_name=strategy_name)
+    use_scoring = bool(payload.get("use_scoring", True))
+    _strategy_obj = None
+    if strategy_name == "llm":
+        from core.strategy_registry.llm_strategy import LLMStrategy
+        _strategy_obj = LLMStrategy()
+    raw = _run(
+        closes,
+        cfg,
+        symbol=symbol,
+        strategy_name=strategy_name if _strategy_obj is None else "llm",
+        use_scoring=use_scoring,
+        strategy=_strategy_obj,
+    )
     raw["regime"] = regime
     raw["seed"] = seed
 
@@ -234,7 +320,7 @@ async def api_backtest(payload: dict[str, Any]) -> dict[str, Any]:
         "calmar": raw.get("calmar"),
         "equity_curve": closes[::step],
         "trades_list": raw.get("trades_list", []),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "source": "local",
     }
 
@@ -323,7 +409,7 @@ EQUITY_PATH = os.path.join(ROOT_DIR, "data", "equity.json")
 @app.get("/equity")
 async def get_equity() -> Response:
     if os.path.exists(EQUITY_PATH):
-        with open(EQUITY_PATH, "r", encoding="utf-8") as f:
+        with open(EQUITY_PATH, encoding="utf-8") as f:
             data = f.read()
     else:
         data = "[]"

@@ -7,9 +7,9 @@ Regras críticas:
 - Não vende posição inexistente.
 - Taxa é descontada em toda operação.
 """
-import unittest
-import sys
 import os
+import sys
+import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

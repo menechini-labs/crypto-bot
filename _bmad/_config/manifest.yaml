@@ -1,0 +1,22 @@
+installation:
+  version: 6.10.0
+  installDate: 2026-07-17T22:10:32.173Z
+  lastUpdated: 2026-07-17T22:18:34.770Z
+modules:
+  - name: core
+    version: 6.10.0
+    installDate: 2026-07-17T22:10:32.148Z
+    lastUpdated: 2026-07-17T22:18:34.769Z
+    source: built-in
+    npmPackage: null
+    repoUrl: null
+  - name: bmm
+    version: 6.10.0
+    installDate: 2026-07-17T22:10:32.111Z
+    lastUpdated: 2026-07-17T22:18:34.770Z
+    source: built-in
+    npmPackage: null
+    repoUrl: null
+ides:
+  - openclaw
+  - opencode

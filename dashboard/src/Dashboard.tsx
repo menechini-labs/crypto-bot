@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import BrowseStrategies from "./browse/BrowseStrategies";
 import EquityChart from "./EquityChart";
 import StatCard from "./StatCard";
+import ScorePanel from "./ScorePanel";
 import type { DashboardState, EquityPoint, PortfolioStats } from "./types";
 
 /* === helpers === */
@@ -28,7 +29,7 @@ function computeStats(data: EquityPoint[]): PortfolioStats {
 
 /* === tabs === */
 
-type Tab = "dashboard" | "browse";
+type Tab = "dashboard" | "browse" | "scoring";
 
 /* === custom hook (react-patterns: encapsula estado + efeito) === */
 
@@ -181,10 +182,18 @@ export default function Dashboard() {
         >
           Browse
         </button>
+        <button
+          type="button"
+          className={`tab ${tab === "scoring" ? "tab--active" : ""}`}
+          onClick={() => setTab("scoring")}
+        >
+          Scoring
+        </button>
       </nav>
 
       {tab === "dashboard" && <DashboardTab state={state} lastCycle={lastCycle} />}
       {tab === "browse" && <BrowseStrategies />}
+      {tab === "scoring" && <ScorePanel />}
     </div>
   );
 }

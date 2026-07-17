@@ -70,12 +70,10 @@ def compute_metrics(
     peak = equity[0]
     max_dd = 0.0
     for v in equity:
-        if v > peak:
-            peak = v
+        peak = max(peak, v)
         if peak > 0:
             dd = (peak - v) / peak
-            if dd > max_dd:
-                max_dd = dd
+            max_dd = max(max_dd, dd)
 
     win_rate = (wins / trades) if trades > 0 else 0.0
 

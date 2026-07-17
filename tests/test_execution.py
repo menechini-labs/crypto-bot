@@ -3,9 +3,9 @@
 Prova que a execução é somente simulação (paper). Se alguém um dia acoplar
 uma exchange real, este teste deve quebrar ou exigir flag explícita de live.
 """
-import unittest
-import sys
 import os
+import sys
+import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

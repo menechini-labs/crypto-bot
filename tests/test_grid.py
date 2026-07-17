@@ -10,9 +10,9 @@ Regras testadas:
 - decide_grid retorna 'sell' quando preço cruza nível para cima e há posição.
 - Em range estreito, alterna buy/sell conforme o preço oscila.
 """
-import unittest
-import sys
 import os
+import sys
+import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

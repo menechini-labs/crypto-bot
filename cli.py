@@ -18,11 +18,11 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from core.config_loader import load_config
-from core.market import fetch_ohlcv
-from core.wallet import PaperWallet
-from core.risk import RiskManager
 from core.execution import PaperExecutor
+from core.market import fetch_ohlcv
 from core.reporter import append_equity, load_history
+from core.risk import RiskManager
+from core.wallet import PaperWallet
 
 STRATEGY_DEFAULT = "grid"
 EQUITY_PATH = os.path.join(ROOT, "data", "equity.json")
@@ -75,7 +75,7 @@ def run_cycle(cfg: dict, wallet: PaperWallet | None = None) -> PaperWallet:
 
         grid_levels = None
         if strategy in ("grid", "grid_dynamic"):
-            from core.strategy import build_grid, build_dynamic_grid
+            from core.strategy import build_dynamic_grid, build_grid
             if strategy == "grid":
                 lo, hi = min(closes), max(closes)
                 lo, hi = lo * 1.02, hi * 0.98
@@ -156,7 +156,7 @@ def main():
             print("Instale dependencias: pip install 'uvicorn[standard]'", file=sys.stderr)
             sys.exit(1)
         from core.strategy_api import app
-        print(f"=== Servidor unificado (API + Frontend) em http://localhost:8000 ===")
+        print("=== Servidor unificado (API + Frontend) em http://localhost:8000 ===")
         uvicorn.run(app, host="localhost", port=8000, log_level="info")
     else:
         print("Modo contínuo (Ctrl+C para parar). Paper only, sem risco real.")

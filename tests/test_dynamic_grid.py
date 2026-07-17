@@ -10,9 +10,9 @@ Regras testadas:
 - decide_dynamic_grid vende ao cruzar nível para cima (com posição).
 - recentraliza: se o preço passa do topo, os níveis deslocam para cima.
 """
-import unittest
-import sys
 import os
+import sys
+import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

@@ -16,7 +16,6 @@ Regime:
 
 Sem look-ahead: usa apenas closes[0..t] quando chamado em backtest.
 """
-import os
 
 # percentual por candle pra classificar inclinacao
 _UPTREND_THRESHOLD = 0.0005   # +0.05% por candle

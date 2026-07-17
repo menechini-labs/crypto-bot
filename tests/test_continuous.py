@@ -6,16 +6,14 @@ Regras críticas:
 - Se a rede falha (market data), o ciclo não quebra o loop (loga e continua).
 - Respeita limite de ciclos (para testes e para nao rodar eterno).
 """
-import sys
 import os
-import time
+import sys
 import unittest
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import cli
-
 from core.wallet import PaperWallet
 
 

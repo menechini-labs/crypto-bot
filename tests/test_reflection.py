@@ -8,11 +8,10 @@ import tempfile
 from unittest.mock import patch
 
 from core.reflection import (
+    load_reflections,
     reflect_trades,
     save_reflection,
-    load_reflections,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

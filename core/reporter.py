@@ -3,6 +3,12 @@
 Stdlib puro. Registra um snapshot por ciclo do bot em modo contínuo,
 para acompanhamento sem depender da CLI. Sem rede, sem risco.
 """
+import logging
+
+logger = logging.getLogger("crypto-bot")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+
 import json
 import os
 import time
@@ -28,6 +34,7 @@ def append_equity(path: str, cycle: int, equity: float, pnl: float, positions: d
 
 def load_history(path: str) -> list[dict]:
     """Carrega o histórico; retorna [] se não existir ou estiver corrompido."""
+    logger.info("load_history path=%s", path)
     if not os.path.exists(path):
         return []
     try:

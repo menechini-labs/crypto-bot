@@ -4,8 +4,12 @@ Classifica risco (ok / warn / alert) baseado em métricas como
 max_drawdown_pct, pnl_pct, sharpe e win_rate. Pode ser usado como
 skill do OpenClaw para análise automatizada de estratégias.
 """
-
 from __future__ import annotations
+
+import logging
+
+logger = logging.getLogger("crypto-bot")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 from typing import Any, NamedTuple
 

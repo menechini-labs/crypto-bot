@@ -5,6 +5,12 @@ Regras:
 - Toda operação desconta taxa (fee_pct).
 - Não permite operar sem caixa/posição suficiente.
 """
+import logging
+
+logger = logging.getLogger("crypto-bot")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+
 
 
 class PaperWallet:

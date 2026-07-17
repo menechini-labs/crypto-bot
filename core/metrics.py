@@ -1,3 +1,9 @@
+import logging
+
+logger = logging.getLogger("crypto-bot")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+
 """Métricas de qualidade de estratégia (stdlib, sem numpy).
 
 Recebe a curva de equity (lista de floats, ordem cronológica) e
@@ -28,6 +34,7 @@ def compute_metrics(
     wins: int = 0,
     trades: int = 0,
 ) -> dict:
+    logger.info("compute_metrics equity_len=%d trades=%d", len(equity), trades)
     """Calcula métricas de qualidade da curva de equity.
 
     Retorna: sharpe, cagr, max_drawdown, win_rate.

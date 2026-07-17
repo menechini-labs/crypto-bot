@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import zipfile
 from datetime import datetime, timezone
@@ -18,6 +19,9 @@ except ImportError:
 
 from core.agent_analyzer import AnalysisResult, analyze_backtest
 from core.reflection import reflect_trades, save_reflection, load_reflections as _load_reflections
+
+logger = logging.getLogger("crypto-bot")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 # ---------------------------------------------------------------------------
 # App
@@ -100,7 +104,7 @@ _VALID_REGIMES = frozenset({"lateral", "uptrend", "downtrend"})
 # ---------------------------------------------------------------------------
 
 
-@app.get("/strategies")
+@app.get("/api/strategies")
 async def list_strategies(
     symbol: str | None = Query(None),
     timeframe: str | None = Query(None),
@@ -109,6 +113,7 @@ async def list_strategies(
     minSharpe: float | None = Query(None),
     author: str | None = Query(None),
 ) -> JSONResponse:
+    logger.info("list_strategies symbol=%s timeframe=%s", symbol, timeframe)
     results = STRATEGIES_MOCK
     if symbol:
         results = [s for s in results if s["symbol"] == symbol]
@@ -125,7 +130,7 @@ async def list_strategies(
     return JSONResponse(results)
 
 
-@app.get("/strategies/{strategy_id}")
+@app.get("/api/strategies/{strategy_id}")
 async def get_strategy(strategy_id: str) -> dict[str, Any] | None:
     for s in STRATEGIES_MOCK:
         if s["id"] == strategy_id:
@@ -133,7 +138,7 @@ async def get_strategy(strategy_id: str) -> dict[str, Any] | None:
     return None
 
 
-@app.get("/strategies/{strategy_id}/fork.json")
+@app.get("/api/strategies/{strategy_id}/fork.json")
 async def fork_strategy(strategy_id: str) -> dict[str, Any] | None:
     for s in STRATEGIES_MOCK:
         if s["id"] == strategy_id:
@@ -141,8 +146,9 @@ async def fork_strategy(strategy_id: str) -> dict[str, Any] | None:
     return None
 
 
-@app.get("/stats")
+@app.get("/api/stats")
 async def get_stats() -> dict[str, Any]:
+    logger.info("get_stats")
     total = len(STRATEGIES_MOCK)
     avg_pnl = sum(s["netProfitPct"] for s in STRATEGIES_MOCK) / total if total else 0
     avg_sharpe = sum(s["sharpeRatio"] for s in STRATEGIES_MOCK) / total if total else 0
@@ -168,6 +174,14 @@ def _bt_id(symbol: str, strategy: str, regime: str, seed: int) -> str:
 @app.post("/api/backtest")
 async def api_backtest(payload: dict[str, Any]) -> dict[str, Any]:
     """Roda backtest, cacheia, retorna report + analysis."""
+    logger.info(
+        "api_backtest symbol=%s strategy=%s regime=%s n=%d seed=%d",
+        payload.get("symbol"),
+        payload.get("strategy"),
+        payload.get("regime"),
+        payload.get("n", 300),
+        payload.get("seed", 42),
+    )
     from core.backtest import run_backtest as _run
     from core.config_loader import load_config
     from core.synth import make_series
@@ -228,6 +242,7 @@ async def api_backtest(payload: dict[str, Any]) -> dict[str, Any]:
 @app.get("/api/backtest/{bt_id}")
 async def get_backtest(bt_id: str) -> dict[str, Any]:
     """Retorna relatório + analysis de backtest cacheado."""
+    logger.info("get_backtest id=%s", bt_id)
     report = _BACKTEST_CACHE.get(bt_id)
     if not report:
         raise HTTPException(404, f"Backtest {bt_id} nao encontrado")
@@ -238,6 +253,7 @@ async def get_backtest(bt_id: str) -> dict[str, Any]:
 @app.post("/api/backtest/{bt_id}/reflection")
 async def backtest_reflection(bt_id: str) -> dict[str, Any]:
     """Gera reflexão pros trades de um backtest cacheado."""
+    logger.info("backtest_reflection id=%s", bt_id)
     report = _BACKTEST_CACHE.get(bt_id)
     if not report:
         raise HTTPException(404, f"Backtest {bt_id} nao encontrado")
@@ -270,6 +286,7 @@ async def get_reflections(limit: int = Query(10, ge=1, le=50)) -> dict[str, Any]
 
 @app.get("/download/project")
 async def download_project() -> FileResponse:
+    logger.info("download_project")
     tmp_zip = "/tmp/crypto-bot-project.zip"
     if os.path.exists(tmp_zip):
         os.remove(tmp_zip)

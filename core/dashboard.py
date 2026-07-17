@@ -6,6 +6,12 @@ para observacao sem CLI.
 Uso:
   python3 cli.py --mode dashboard
 """
+import logging
+
+logger = logging.getLogger("crypto-bot")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+
 import json
 import os
 import mimetypes
@@ -24,6 +30,7 @@ def build_handler(equity_path: str, static_dir: str = DEFAULT_STATIC):
 
     Testavel diretamente sem socket.
     """
+    logger.info("build_handler equity_path=%s", equity_path)
     mimetypes.init()
 
     def handler(path: str):

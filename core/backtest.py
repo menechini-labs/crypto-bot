@@ -4,6 +4,12 @@ Aplica uma estratégia sobre um histórico de closes, candle a candle.
 No passo t, a decisão usa APENAS closes[0..t] (sem olhar o futuro).
 Usa PaperWallet + PaperExecutor (paper only, sem ordem real).
 """
+import logging
+
+logger = logging.getLogger("crypto-bot")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+
 from core.wallet import PaperWallet
 from core.risk import RiskManager
 from core.execution import PaperExecutor
@@ -29,6 +35,7 @@ def run_backtest(
     symbol: str = "BACKTEST/USDT",
     strategy_name: str = "default",
 ) -> dict:
+    logger.info("run_backtest symbol=%s strategy=%s n=%d", symbol, strategy_name, len(closes))
     """Retorna relatório: final_equity, pnl, trades, win_rate, max_drawdown_pct,
     equity_curve e lista de trades."""
     wallet = PaperWallet(initial_cash=cfg["initial_cash_usdt"], fee_pct=cfg["fee_pct"])

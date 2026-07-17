@@ -2,6 +2,12 @@
 
 Usa apenas urllib (stdlib). Retorna velas OHLCV. Nenhuma credencial necessária.
 """
+import logging
+
+logger = logging.getLogger("crypto-bot")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+
 import json
 import urllib.request
 import urllib.error
@@ -12,6 +18,7 @@ def fetch_ohlcv(symbol: str, timeframe: str = "1h", limit: int = 100) -> list[di
 
     symbol no formato Binance, ex: "BTC/USDT" -> "BTCUSDT".
     """
+    logger.info("fetch_ohlcv symbol=%s timeframe=%s limit=%d", symbol, timeframe, limit)
     pair = symbol.replace("/", "").upper()
     url = (
         f"https://api.binance.com/api/v3/klines"

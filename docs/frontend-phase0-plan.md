@@ -1,5 +1,7 @@
 # Phase 0 Plan — Unblock the Day-Trader Frontend
 
+**STATUS: DONE (2026-07-17)** — commit `69849db` + `966e235` + `64a5162`.
+
 Companion to `frontend-daytrader-architecture.md`. Concrete, file-level steps.
 Goal: remove fake data + synthetic scoring, add observability, expose real strategies.
 Constraint: paper-only, Binance public data, no new heavy deps.

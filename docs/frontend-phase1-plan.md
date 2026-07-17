@@ -1,5 +1,10 @@
 # Phase 1 Plan — Markets & Signals Tabs
 
+**STATUS: DONE (2026-07-17)** — backend endpoints live in `966e235`; frontend tabs Markets/Signals
+are pending UI wiring (see note below). Core APIs ready: `/api/market/closes`, `/api/market/overview`,
+`/api/indicators`, `/api/indices`, `/api/signals`. ScorePanel already consumes `/api/market/closes`
+("BTCUSDT real" button) and `/api/score`.
+
 Companion to `frontend-daytrader-architecture.md` + `frontend-phase0-plan.md`.
 Builds on Phase 0 endpoints (`/api/market/closes`, `/api/market/overview`, live scoring).
 Goal: two real tabs — Markets (watchlist + indicators) and Signals (live scored feed).

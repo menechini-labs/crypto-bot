@@ -40,13 +40,17 @@ def run_backtest(
     symbol: str = "BACKTEST/USDT",
     strategy_name: str = "default",
     use_scoring: bool = True,
+    strategy: object | None = None,
 ) -> dict:
-    logger.info("run_backtest symbol=%s strategy=%s n=%d scoring=%s", symbol, strategy_name, len(closes), use_scoring)
+    logger.info("run_backtest symbol=%s strategy=%s n=%d scoring=%s obj=%s", symbol, strategy_name, len(closes), use_scoring, strategy is not None)
     """Retorna relatório: final_equity, pnl, trades, win_rate, max_drawdown_pct,
     equity_curve e lista de trades.
 
     Com use_scoring=True, cada sinal de compra passa pelo score_signal +
     should_execute (confianca/risco) antes de ser executado.
+
+    Se `strategy` (objeto com .decide(closes, has_position, ctx)) for passado,
+    ele substitui o _strategy_signal por nome (ex.: LLMStrategy).
     """
     wallet = PaperWallet(initial_cash=cfg["initial_cash_usdt"], fee_pct=cfg["fee_pct"])
     risk = RiskManager(
@@ -95,7 +99,17 @@ def run_backtest(
             grid_levels = build_dynamic_grid(center=center, step=step, n=11)
             signal = decide_dynamic_grid(window, grid_levels, has_position)
         else:
-            signal = _strategy_signal(strategy_name, window, grid_levels, has_position)
+            if strategy is not None:
+                sctx = {
+                    "symbol": symbol,
+                    "regime": cfg.get("regime", "lateral"),
+                    "volatility": cfg.get("volatility", 2.5),
+                    "sl_pct": cfg.get("stop_loss_pct", 0.05) * 100,
+                    "tp_pct": cfg.get("take_profit_pct", 0.10) * 100,
+                }
+                signal = strategy.decide(window, has_position, ctx=sctx)
+            else:
+                signal = _strategy_signal(strategy_name, window, grid_levels, has_position)
 
         entry = wallet.positions.get(symbol, {}).get("avg_price")
 

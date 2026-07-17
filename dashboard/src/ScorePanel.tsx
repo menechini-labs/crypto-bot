@@ -35,6 +35,35 @@ export default function ScorePanel() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SignalScoreResponse | null>(null);
 
+  async function runLLM() {
+    setLoading(true);
+    setError(null);
+    try {
+      const parsed = closes
+        .split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => !Number.isNaN(n));
+      if (parsed.length < 20) {
+        setError("Informe ao menos 20 valores de closes separados por vírgula.");
+        setLoading(false);
+        return;
+      }
+      const res = await fetch("/api/llm-signal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ closes: parsed, has_position: false, signal }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = (await res.json()) as SignalScoreResponse & { llm_enabled: boolean };
+      setResult(j);
+      setSignal(j.signal as "buy" | "sell" | "hold");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "erro");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function runScore() {
     setLoading(true);
     setError(null);
@@ -89,6 +118,9 @@ export default function ScorePanel() {
           <button type="button" onClick={() => setCloses(genSeries(60, "downtrend").join(","))}>
             Gerar downtrend
           </button>
+          <button type="button" onClick={runLLM} disabled={loading}>
+            Usar LLM
+          </button>
         </div>
         <textarea
           rows={3}
@@ -105,6 +137,9 @@ export default function ScorePanel() {
 
       {result && (
         <div className="score-result">
+          {!result.llm_enabled && (
+            <p className="hint">LLM desativado (sem ENABLE_LLM=1 / LLM_API_KEY): usando fallback hold.</p>
+          )}
           <div className="score-metrics">
             <Stat label="Confiança" value={`${(result.score.confidence * 100).toFixed(0)}%`} />
             <Stat label="Risco" value={`${(result.score.risk_score * 100).toFixed(0)}%`} />

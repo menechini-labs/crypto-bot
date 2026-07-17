@@ -51,4 +51,5 @@ export interface SignalScoreResponse {
   signal: string;
   score: ScoreSignal;
   explanation: string;
+  llm_enabled?: boolean;
 }

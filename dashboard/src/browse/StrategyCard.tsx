@@ -18,8 +18,8 @@ export default function StrategyCard({ strategy }: Props) {
       </div>
 
       <div className="strat-card-meta">
-        <span>{strategy.author}</span>
-        <span>{strategy.timeframe}</span>
+        <span className="tf">{strategy.timeframe}</span>
+        <span className="by">@{strategy.author}</span>
       </div>
 
       <Sparkline points={strategy.equityCurve} width={280} height={60} />

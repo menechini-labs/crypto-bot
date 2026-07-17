@@ -12,9 +12,9 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backtest import run_backtest
-from wallet import PaperWallet
-from config_loader import load_config
+from core.backtest import run_backtest
+from core.wallet import PaperWallet
+from core.config_loader import load_config
 
 
 def make_closes(n: int, start: float = 100.0, step: float = 1.0) -> list[float]:

@@ -5,7 +5,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from indicators import macd, bollinger
+from core.indicators import macd, bollinger
 
 
 def trend_up(n=60, start=100.0, step=1.0):

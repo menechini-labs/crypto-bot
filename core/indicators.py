@@ -2,6 +2,12 @@
 
 Usados pela estratégia: SMA, RSI, EMA, MACD, Bollinger, cruzamento de médias.
 """
+import logging
+
+logger = logging.getLogger("crypto-bot")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+
 
 
 def sma(values: list[float], period: int) -> float | None:

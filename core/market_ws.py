@@ -10,7 +10,7 @@ import websockets
 from .scoring import calculate_volatility, detect_regime, support_resistance
 from .strategy_registry import get_all
 from .strategy_registry.base import BaseStrategy
-from .reporter import Reporter
+from .reporter import append_equity, latest_equity, load_history
 
 log = logging.getLogger(__name__)
 
@@ -88,7 +88,8 @@ class WebSocketMarket:
                         signal = strategy.decide(closes[-10:], has_position=False, ctx=ctx)
                         log.info("Strategy %s signal: %s", name, signal)
 
-                await Reporter.update_metrics(self.cache[-1])
+                await asyncio.sleep(0)
+                log.debug("Cycle processed; cache len=%d", len(self.cache))
             except websockets.ConnectionClosed as e:
                 log.warning("WS closed: %s - reconnecting", e)
                 self.running = False

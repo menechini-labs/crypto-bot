@@ -7,6 +7,7 @@ import AnalyzePage from "./browse/AnalyzePage";
 import HealthPanel from "./HealthPanel";
 import AgentDesk from "./AgentDesk";
 import NewsFeed from "./NewsFeed";
+import TradeDesk from "./TradeDesk";
 import type { DashboardState, EquityPoint, PortfolioStats } from "./types";
 
 /* === helpers === */
@@ -33,7 +34,7 @@ function computeStats(data: EquityPoint[]): PortfolioStats {
 
 /* === tabs === */
 
-type Tab = "dashboard" | "browse" | "scoring" | "analyze" | "health" | "agents" | "news";
+type Tab = "dashboard" | "browse" | "scoring" | "analyze" | "health" | "agents" | "news" | "tradedesk";
 
 /* === custom hook (react-patterns: encapsula estado + efeito) === */
 
@@ -221,6 +222,13 @@ export default function Dashboard() {
         >
           News
         </button>
+        <button
+          type="button"
+          className={`tab ${tab === "tradedesk" ? "tab--active" : ""}`}
+          onClick={() => setTab("tradedesk")}
+        >
+          Trade Desk
+        </button>
       </nav>
 
       {tab === "dashboard" && <DashboardTab state={state} lastCycle={lastCycle} />}
@@ -230,6 +238,7 @@ export default function Dashboard() {
       {tab === "health" && <HealthPanel />}
       {tab === "agents" && <AgentDesk />}
       {tab === "news" && <NewsFeed />}
+      {tab === "tradedesk" && <TradeDesk />}
     </div>
   );
 }

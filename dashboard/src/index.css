@@ -1803,3 +1803,31 @@ body {
 .news-item__title { display: block; color: var(--text); text-decoration: none; font-size: 14px; line-height: 1.4; margin-bottom: 0.25rem; }
 .news-item__title:hover { color: var(--accent); }
 .news-item__date { font-size: 10px; }
+
+/* === Phase 3: Trade Desk === */
+.trade-desk { padding: 1.5rem; max-width: 1000px; margin: 0 auto; }
+.trade-desk__head { margin-bottom: 1rem; }
+.trade-desk__head h2 { font-family: var(--font-display); display: flex; align-items: center; gap: 0.5rem; }
+.trade-desk__panel { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem; }
+.trade-desk__summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1rem; }
+.td-stat { display: flex; flex-direction: column; gap: 0.25rem; }
+.td-stat small { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; }
+.td-stat span { font-family: var(--font-mono); font-size: 1.25rem; }
+.trade-desk__exits { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+.td-exit { background: rgba(255,196,0,0.12); color: var(--sig-warn); font-size: 11px; padding: 2px 8px; border-radius: 6px; font-family: var(--font-mono); }
+.trade-desk__form { display: grid; grid-template-columns: repeat(5, 1fr) auto; gap: 0.75rem; align-items: end; }
+.trade-desk__form label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 11px; color: var(--text-dim); }
+.trade-desk__form input { background: var(--panel-2); border: 1px solid var(--panel-border); border-radius: 7px; padding: 7px 9px; color: var(--text); font-family: var(--font-mono); font-size: 13px; }
+.trade-desk__actions { display: flex; gap: 0.5rem; }
+.td-buy, .td-sell { padding: 8px 14px; border-radius: 8px; border: none; font-family: var(--font-mono); font-size: 12px; font-weight: 700; cursor: pointer; }
+.td-buy { background: var(--sig-ok); color: #0a1a12; }
+.td-sell { background: var(--sig-rej); color: #1a0a0e; }
+.td-msg { font-size: 12px; margin-top: 0.75rem; font-family: var(--font-mono); }
+.td-msg--ok { color: var(--sig-ok); }
+.td-msg--err { color: var(--sig-rej); }
+.trade-desk__positions h3 { font-family: var(--font-mono); font-size: 13px; color: var(--accent); margin-bottom: 0.75rem; }
+.td-table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 12px; }
+.td-table th { text-align: left; color: var(--text-dim); padding: 6px 8px; border-bottom: 1px solid var(--panel-border); font-weight: 500; }
+.td-table td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.td-table .pos { color: var(--sig-ok); }
+.td-table .neg { color: var(--sig-rej); }

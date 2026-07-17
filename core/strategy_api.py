@@ -31,6 +31,7 @@ from core import market as _market
 from core import indicators as _ind
 from core import agent_desk as _agent_desk
 from core import news as _news
+from core import paper_engine as _paper_engine
 from core.scoring import score_signal as _score_signal, detect_regime as _detect_regime, should_execute
 
 logger = logging.getLogger("crypto-bot")
@@ -646,6 +647,51 @@ async def api_news(
         "impact_headlines": impact,
         "items": [i.to_dict() for i in items],
     }
+
+
+# ---------------------------------------------------------------------------
+# Endpoint: Trade Desk — paper positions + orders (Phase 3)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/positions")
+async def api_positions() -> dict[str, Any]:
+    """Paper positions snapshot + auto SL/TP/trailing check."""
+    eng = _paper_engine.get_engine()
+    exits = eng.check_exits()
+    snap = eng.snapshot()
+    snap["exits"] = exits
+    return snap
+
+
+@app.post("/api/orders")
+async def api_submit_order(payload: dict[str, Any]) -> dict[str, Any]:
+    """Submit a PAPER order (buy/sell). Never touches real funds."""
+    required = ("symbol", "side", "qty")
+    if any(k not in payload for k in required):
+        raise HTTPException(status_code=400, detail="symbol, side, qty obrigatorios")
+    side = str(payload["side"]).lower()
+    if side not in ("buy", "sell"):
+        raise HTTPException(status_code=400, detail="side deve ser buy ou sell")
+    try:
+        qty = float(payload["qty"])
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="qty invalido")
+    if qty <= 0:
+        raise HTTPException(status_code=400, detail="qty deve ser > 0")
+    from core.paper_engine import Order
+    order = Order(
+        symbol=str(payload["symbol"]).upper(),
+        side=side,
+        qty=qty,
+        order_type=str(payload.get("order_type", "market")).lower(),
+        sl_pct=float(payload["sl_pct"]) if payload.get("sl_pct") else None,
+        tp_pct=float(payload["tp_pct"]) if payload.get("tp_pct") else None,
+        trailing_pct=float(payload["trailing_pct"]) if payload.get("trailing_pct") else None,
+    )
+    result = _paper_engine.get_engine().submit(order)
+    _METRICS["orders_paper"] += 1
+    status = 200 if result.get("ok") else 400
+    return JSONResponse(content=result, status_code=status)
 
 
 # ---------------------------------------------------------------------------

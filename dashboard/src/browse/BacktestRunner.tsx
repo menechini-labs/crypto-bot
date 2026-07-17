@@ -52,7 +52,7 @@ export default function BacktestRunner({ onRun }: Props) {
     <form className="backtest-runner" onSubmit={submit}>
       <h2 className="bt-title">Rodar Backtest</h2>
 
-      <div className="bt-fields">
+      <div className="bt-form">
         <label>
           <span>Símbolo</span>
           <input
@@ -114,7 +114,7 @@ export default function BacktestRunner({ onRun }: Props) {
         </label>
       </div>
 
-      <button type="submit" className="bt-go" disabled={status === "running"}>
+      <button type="submit" className="bt-run" disabled={status === "running"}>
         {status === "running" ? "Rodando..." : "Executar"}
       </button>
 

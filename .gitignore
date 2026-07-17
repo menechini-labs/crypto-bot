@@ -24,3 +24,7 @@ data/
 # Node/React
 node_modules/
 dashboard/node_modules/
+
+# Tooling artifacts
+.playwright-mcp/
+.sisyphus/

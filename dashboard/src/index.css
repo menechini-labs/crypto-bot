@@ -237,9 +237,6 @@ body::after {
   stroke-linecap: round;
   stroke-linejoin: round;
   filter: drop-shadow(0 0 6px var(--accent-glow));
-  stroke-dasharray: 2000;
-  stroke-dashoffset: 2000;
-  animation: drawLine 1.4s ease-out 0.4s forwards;
 }
 
 .chart .line-positive {
@@ -321,12 +318,6 @@ body::after {
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes drawLine {
-  to {
-    stroke-dashoffset: 0;
   }
 }
 
@@ -819,4 +810,617 @@ body::after {
   margin-top: 12px;
   font-family: "DM Mono", monospace;
   font-size: 12px;
+}
+
+/* — Buttons */
+.btn-primary {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: var(--bg);
+  font-family: "Figtree", system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-secondary {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: "Figtree", system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: border-color 0.15s, opacity 0.15s;
+}
+
+.btn-secondary:hover {
+  border-color: var(--accent);
+}
+
+/* — Browse header actions / results */
+.browse-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.browse-body {
+  margin-top: 8px;
+}
+
+.result-count {
+  font-size: 12px;
+  color: var(--muted);
+  font-family: "DM Mono", monospace;
+  margin: 0 0 12px;
+}
+
+/* — Analyze page */
+.analyze-page {
+  animation: fadeSlideIn 0.4s ease-out both;
+}
+
+.analyze-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.analyze-header h1 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.back-link {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+  font-family: "DM Mono", monospace;
+  transition: color 0.15s;
+}
+
+.back-link:hover {
+  color: var(--accent);
+}
+
+.analyze-form {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 16px;
+}
+
+.form-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-row label span {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-family: "DM Mono", monospace;
+}
+
+.form-row input,
+.form-row select {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: "DM Mono", monospace;
+  font-size: 12px;
+  padding: 7px 10px;
+  outline: none;
+}
+
+.form-row input:focus,
+.form-row select:focus {
+  border-color: var(--accent);
+}
+
+.form-action {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* — Agent Analysis Card */
+.agent-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  margin: 16px 0;
+  animation: fadeSlideIn 0.4s ease-out both;
+}
+
+.agent-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.agent-icon {
+  font-size: 16px;
+}
+
+.agent-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--muted);
+  font-family: "DM Mono", monospace;
+}
+
+.agent-summary {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  margin: 0 0 12px;
+}
+
+.agent-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 10px;
+}
+
+.agent-metrics > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--panel-2);
+  padding: 8px 10px;
+  border-radius: var(--radius);
+}
+
+.am-label {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-family: "DM Mono", monospace;
+}
+
+.am-val {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: "DM Mono", monospace;
+  color: var(--text);
+}
+
+/* — Reflection */
+.analyze-agent,
+.reflection-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin: 16px 0;
+  animation: fadeSlideIn 0.4s ease-out both;
+}
+
+.reflection-panel h2,
+.reflection-panel h3 {
+  font-size: 14px;
+  margin: 0 0 12px;
+  color: var(--accent);
+}
+
+.reflection-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.reflection-metrics > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--panel-2);
+  padding: 10px 12px;
+  border-radius: var(--radius);
+}
+
+.reflection-metrics small {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-family: "DM Mono", monospace;
+}
+
+.reflection-metrics span {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: "DM Mono", monospace;
+}
+
+.reflection-insights,
+.reflection-recs ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.reflection-insights li,
+.reflection-recs li {
+  margin-bottom: 4px;
+}
+
+.reflection-recs h4 {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 12px 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* — Report */
+.analyze-report,
+.report-view {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  margin-top: 16px;
+  animation: fadeSlideIn 0.4s ease-out both;
+}
+
+.report-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.report-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.report-badge {
+  font-size: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  border-radius: 4px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-family: "DM Mono", monospace;
+}
+
+.report-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.report-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--panel-2);
+  padding: 10px 12px;
+  border-radius: var(--radius);
+}
+
+.kpi-label {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-family: "DM Mono", monospace;
+}
+
+.kpi-value {
+  font-size: 16px;
+  font-weight: 700;
+  font-family: "DM Mono", monospace;
+  color: var(--text);
+}
+
+.report-chart,
+.report-details,
+.report-trades {
+  margin-top: 16px;
+}
+
+.report-chart h2,
+.report-chart h3,
+.report-details h2,
+.report-trades h2 {
+  font-size: 13px;
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.chart-caption {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: "DM Mono", monospace;
+  margin: 8px 0 0;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.details-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.details-grid dt {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-family: "DM Mono", monospace;
+}
+
+.details-grid dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: "DM Mono", monospace;
+  color: var(--text);
+}
+
+.trades-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.trades-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.trades-table th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 600;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.trades-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  font-family: "DM Mono", monospace;
+}
+
+.trades-table tr:last-child td {
+  border-bottom: none;
+}
+
+.side-buy {
+  color: var(--green);
+}
+
+.side-sell {
+  color: var(--red);
+}
+
+.trades-truncated {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 8px 10px;
+  margin: 0;
+  font-family: "DM Mono", monospace;
+}
+
+.report-footer {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.report-footer p {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: "DM Mono", monospace;
+  margin: 2px 0;
+}
+
+/* — Report states */
+.report-loading,
+.report-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 60px 20px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  animation: fadeSlideIn 0.3s ease-out both;
+}
+
+.report-error h2 {
+  font-size: 16px;
+  margin: 0;
+  color: var(--red);
+}
+
+.report-error p {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.report-error button {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: "Figtree", system-ui, sans-serif;
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.report-error button:hover {
+  border-color: var(--accent);
+}
+
+/* — Spinner */
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* — Inline backtest form */
+.backtest-form-inline {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  margin: 16px 0;
+  animation: fadeSlideIn 0.3s ease-out both;
+}
+
+.backtest-form-inline h3 {
+  font-size: 14px;
+  margin: 0 0 12px;
+  color: var(--text);
+}
+
+.bt-reflection {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: "Figtree", system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 18px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.15s, opacity 0.15s;
+}
+
+.bt-reflection:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.bt-reflection:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.bt-error {
+  background: var(--red-dim);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--red);
+  padding: 12px;
+  border-radius: var(--radius);
+  margin-top: 12px;
+  font-family: "DM Mono", monospace;
+  font-size: 12px;
+}
+
+.bt-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.bt-kpis .kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--panel-2);
+  padding: 10px 12px;
+  border-radius: var(--radius);
+}
+
+.bt-kpis .kpi small {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-family: "DM Mono", monospace;
+}
+
+.bt-kpis .kpi span {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: "DM Mono", monospace;
+  color: var(--text);
 }

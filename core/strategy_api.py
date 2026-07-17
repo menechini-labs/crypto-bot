@@ -1,16 +1,21 @@
-"""FastAPI application for crypto-bot strategy API, browse, backtest, downloads, and agent analysis."""
+"""FastAPI application for crypto-bot strategy API, browse, backtest, downloads, and agent analysis.
+
+Unified server: serves API routes (/api/*), equity data (/equity),
+and the React SPA frontend (dashboard/dist/) on a single port.
+"""
 
 from __future__ import annotations
 
 import logging
+import mimetypes
 import os
 import zipfile
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 try:
     import uvicorn
@@ -60,7 +65,7 @@ STRATEGIES_MOCK: list[dict[str, Any]] = [
         "sortinoRatio": 1.62,
         "totalTrades": 127,
         "equityCurve": [1.0, 1.02, 1.05, 1.03, 1.08, 1.06, 1.12, 1.15, 1.13, 1.18],
-        "forkUrl": "/strategies/grid_static_btc/fork.json",
+        "forkUrl": "/api/strategies/grid_static_btc/fork.json",
     },
     {
         "id": "grid_dynamic_eth",
@@ -76,7 +81,7 @@ STRATEGIES_MOCK: list[dict[str, Any]] = [
         "sortinoRatio": 2.12,
         "totalTrades": 89,
         "equityCurve": [1.0, 1.03, 1.07, 1.05, 1.12, 1.10, 1.18, 1.22, 1.20, 1.25],
-        "forkUrl": "/strategies/grid_dynamic_eth/fork.json",
+        "forkUrl": "/api/strategies/grid_dynamic_eth/fork.json",
     },
     {
         "id": "trend_follow_sol",
@@ -92,7 +97,7 @@ STRATEGIES_MOCK: list[dict[str, Any]] = [
         "sortinoRatio": -0.48,
         "totalTrades": 156,
         "equityCurve": [1.0, 0.98, 0.95, 0.92, 0.90, 0.88, 0.85, 0.82, 0.80, 0.78],
-        "forkUrl": "/strategies/trend_follow_sol/fork.json",
+        "forkUrl": "/api/strategies/trend_follow_sol/fork.json",
     },
 ]
 
@@ -304,6 +309,54 @@ async def download_project() -> FileResponse:
     return FileResponse(
         tmp_zip, media_type="application/zip", filename="crypto-bot-project.zip"
     )
+
+
+# ---------------------------------------------------------------------------
+# Static files + SPA frontend (dashboard/dist/)
+# ---------------------------------------------------------------------------
+
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+STATIC_DIR = os.path.join(ROOT_DIR, "dashboard", "dist")
+EQUITY_PATH = os.path.join(ROOT_DIR, "data", "equity.json")
+
+
+@app.get("/equity")
+async def get_equity() -> Response:
+    if os.path.exists(EQUITY_PATH):
+        with open(EQUITY_PATH, "r", encoding="utf-8") as f:
+            data = f.read()
+    else:
+        data = "[]"
+    return Response(content=data, media_type="application/json")
+
+
+@app.get("/", response_model=None)
+async def serve_index():
+    fpath = os.path.join(STATIC_DIR, "index.html")
+    if os.path.exists(fpath):
+        return FileResponse(fpath, media_type="text/html")
+    return Response(status_code=404, content="Dashboard nao compilado. Rode `npm run build` em dashboard/")
+
+
+@app.get("/{full_path:path}", response_model=None)
+async def spa_fallback(full_path: str):
+    # Deixa FastAPI lidar com /docs, /openapi.json (registrados internamente)
+    # /api/* routes sao definidas acima e tomam prioridade
+    if full_path.startswith("api/"):
+        return Response(status_code=404)
+
+    # Tenta servir como arquivo estatico real
+    fpath = os.path.join(STATIC_DIR, full_path)
+    if os.path.exists(fpath) and os.path.isfile(fpath):
+        ctype, _ = mimetypes.guess_type(fpath)
+        return FileResponse(fpath, media_type=ctype or "application/octet-stream")
+
+    # SPA fallback: toda rota nao-API serve index.html (para React Router)
+    spa_path = os.path.join(STATIC_DIR, "index.html")
+    if os.path.exists(spa_path):
+        return FileResponse(spa_path, media_type="text/html")
+
+    return Response(status_code=404, content="Not found")
 
 
 # ---------------------------------------------------------------------------

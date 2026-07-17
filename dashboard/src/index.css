@@ -1416,3 +1416,22 @@ body {
   font-family: var(--font-mono);
   color: var(--text);
 }
+
+/* === ScorePanel === */
+.score-controls { display: flex; flex-direction: column; gap: 10px; max-width: 720px; }
+.score-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.score-row select, .score-row button, .score-controls textarea { font-family: var(--font-mono); font-size: 12px; }
+.score-controls textarea { width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; }
+.score-controls button { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: var(--radius); cursor: pointer; }
+.score-controls button.primary { background: var(--accent); color: #06121f; font-weight: 700; border: none; }
+.hint { color: var(--muted); font-size: 12px; max-width: 720px; }
+.score-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin: 14px 0; }
+.score-metrics .stat { background: var(--panel-2); padding: 10px 12px; border-radius: var(--radius); display: flex; flex-direction: column; gap: 2px; }
+.score-metrics .stat__label { font-size: 10px; text-transform: uppercase; color: var(--muted); font-family: var(--font-mono); }
+.score-metrics .stat__value { font-size: 16px; font-weight: 700; font-family: var(--font-mono); }
+.score-bars { display: flex; flex-direction: column; gap: 8px; max-width: 480px; }
+.score-bar { display: grid; grid-template-columns: 90px 1fr 44px; gap: 8px; align-items: center; font-family: var(--font-mono); font-size: 12px; }
+.score-bar__track { height: 10px; background: var(--panel-2); border-radius: 6px; overflow: hidden; }
+.score-bar__fill { height: 100%; border-radius: 6px; }
+.score-bar__val { text-align: right; color: var(--muted); }
+.score-explain { color: var(--text); font-family: var(--font-mono); font-size: 12px; background: var(--panel-2); padding: 10px; border-radius: var(--radius); }

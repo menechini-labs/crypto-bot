@@ -177,6 +177,44 @@ def _bt_id(symbol: str, strategy: str, regime: str, seed: int) -> str:
     return f"{symbol.replace('/', '_')}_{strategy}_{regime}_{seed}"
 
 
+@app.post("/api/score")
+async def api_score(payload: dict[str, Any]) -> dict[str, Any]:
+    """Calcula o scoring de um sinal dado um histórico de closes.
+
+    Body: {
+      "closes": [float, ...],   # obrigatório (>= 20)
+      "signal": "buy"|"sell"|"hold",
+      "has_position": bool,
+      "ctx": { ... }            # opcional (symbol, regime, volatility, sl_pct, tp_pct)
+    }
+    Retorna o SignalScore serializado (confiança, risco, composite, componentes).
+    """
+    logger.info("api_score signal=%s closes=%d", payload.get("signal"), len(payload.get("closes", [])))
+    from core.scoring import score_signal, explain_score
+
+    closes = payload.get("closes")
+    if not isinstance(closes, list) or len(closes) < 20:
+        raise HTTPException(422, "closes deve ser lista com >= 20 valores")
+    signal = payload.get("signal", "hold")
+    if signal not in ("buy", "sell", "hold"):
+        raise HTTPException(422, "signal deve ser buy|sell|hold")
+    has_position = bool(payload.get("has_position", False))
+    ctx = payload.get("ctx") or {
+        "symbol": "BTCUSDT",
+        "regime": "lateral",
+        "volatility": 2.5,
+        "sl_pct": 5.0,
+        "tp_pct": 10.0,
+    }
+    score = score_signal([float(c) for c in closes], signal, has_position, ctx)
+    return {
+        "status": "ok",
+        "signal": signal,
+        "score": score.__dict__,
+        "explanation": explain_score(score),
+    }
+
+
 @app.post("/api/backtest")
 async def api_backtest(payload: dict[str, Any]) -> dict[str, Any]:
     """Roda backtest, cacheia, retorna report + analysis."""
@@ -207,7 +245,8 @@ async def api_backtest(payload: dict[str, Any]) -> dict[str, Any]:
 
     cfg = load_config()
     closes = make_series(regime=regime, n=n, seed=seed)
-    raw = _run(closes, cfg, symbol=symbol, strategy_name=strategy_name)
+    use_scoring = bool(payload.get("use_scoring", True))
+    raw = _run(closes, cfg, symbol=symbol, strategy_name=strategy_name, use_scoring=use_scoring)
     raw["regime"] = regime
     raw["seed"] = seed
 

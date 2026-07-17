@@ -14,6 +14,11 @@ from core.execution import PaperExecutor
 from core.metrics import compute_metrics
 from core.risk import RiskManager
 from core.wallet import PaperWallet
+try:
+    from core.scoring import score_signal, should_execute
+except Exception:  # scoring opcional
+    score_signal = None
+    should_execute = None
 
 
 def _strategy_signal(strategy_name: str, closes: list[float], grid_levels=None, has_position=False) -> str:
@@ -34,10 +39,15 @@ def run_backtest(
     cfg: dict,
     symbol: str = "BACKTEST/USDT",
     strategy_name: str = "default",
+    use_scoring: bool = True,
 ) -> dict:
-    logger.info("run_backtest symbol=%s strategy=%s n=%d", symbol, strategy_name, len(closes))
+    logger.info("run_backtest symbol=%s strategy=%s n=%d scoring=%s", symbol, strategy_name, len(closes), use_scoring)
     """Retorna relatório: final_equity, pnl, trades, win_rate, max_drawdown_pct,
-    equity_curve e lista de trades."""
+    equity_curve e lista de trades.
+
+    Com use_scoring=True, cada sinal de compra passa pelo score_signal +
+    should_execute (confianca/risco) antes de ser executado.
+    """
     wallet = PaperWallet(initial_cash=cfg["initial_cash_usdt"], fee_pct=cfg["fee_pct"])
     risk = RiskManager(
         max_position_pct=cfg["max_position_pct"],
@@ -112,6 +122,20 @@ def run_backtest(
                 if price >= entry:
                     wins += 1
         elif signal == "buy" and _entry_price is None:
+            # Gate de scoring: so executa se confianca/risco aprovados
+            if use_scoring and score_signal is not None and should_execute is not None:
+                sctx = {
+                    "symbol": symbol,
+                    "regime": cfg.get("regime", "lateral"),
+                    "volatility": cfg.get("volatility", 2.5),
+                    "sl_pct": cfg.get("stop_loss_pct", 0.05) * 100,
+                    "tp_pct": cfg.get("take_profit_pct", 0.10) * 100,
+                }
+                _score = score_signal(window, signal, has_position=False, ctx=sctx)
+                if not should_execute(_score, min_confidence=0.4, min_risk=0.5):
+                    logger.debug("buy rejeitado pelo scoring (conf=%.2f risk=%.2f)",
+                                 _score.confidence, _score.risk_score)
+                    continue
             notional = risk.max_notional(wallet.cash)
             if notional > 0:
                 executor.execute_buy(symbol, price, notional)

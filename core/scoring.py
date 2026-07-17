@@ -97,6 +97,8 @@ def rsi(closes: list[float], period: int = 14) -> float:
             losses.append(-diff)
     avg_gain = statistics.mean(gains) if gains else 0.0
     avg_loss = statistics.mean(losses) if losses else 1e-9
+    if avg_loss == 0:
+        return 100.0  # sem perdas -> RSI maximo
     rs = avg_gain / avg_loss
     return 100 - (100 / (1 + rs))
 

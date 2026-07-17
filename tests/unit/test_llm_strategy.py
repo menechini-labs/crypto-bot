@@ -64,8 +64,22 @@ def test_llm_buy_signal_passes_when_risk_ok(monkeypatch):
 
     monkeypatch.setattr(mod, "_llm_request", _fake_buy)
     strategy = LLMStrategy()
-    closes = [float(i) for i in range(100, 110)]
+    # 60 candles em clara uptrend para detectar regime + confianca alta
+    closes = [float(100 + i) for i in range(60)]
     assert strategy.decide(closes, has_position=False) == "buy"
+
+
+def test_llm_buy_signal_rejected_when_low_confidence(monkeypatch):
+    import core.strategy_registry.llm_strategy as mod
+
+    def _fake_buy(_prompt, _max_tokens=256):
+        return "BUY"
+
+    monkeypatch.setattr(mod, "_llm_request", _fake_buy)
+    strategy = LLMStrategy()
+    # 10 candles (regime unknown, RSI neutro) -> confianca baixa -> hold
+    closes = [float(i) for i in range(100, 110)]
+    assert strategy.decide(closes, has_position=False) == "hold"
 
 
 def test_risk_manager_guardrails():

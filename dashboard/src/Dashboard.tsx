@@ -36,6 +36,24 @@ function computeStats(data: EquityPoint[]): PortfolioStats {
 
 type Tab = "dashboard" | "browse" | "scoring" | "analyze" | "health" | "agents" | "news" | "tradedesk";
 
+interface NavItem {
+  id: Tab;
+  label: string;
+  icon: string;
+  group: string;
+}
+
+const NAV: NavItem[] = [
+  { id: "dashboard", label: "Dashboard", icon: "◧", group: "Overview" },
+  { id: "browse", label: "Browse", icon: "⌕", group: "Overview" },
+  { id: "scoring", label: "Scoring", icon: "✦", group: "Markets" },
+  { id: "analyze", label: "Analyze", icon: "◎", group: "Markets" },
+  { id: "agents", label: "Agents", icon: "⚇", group: "Intelligence" },
+  { id: "news", label: "News", icon: "❏", group: "Intelligence" },
+  { id: "health", label: "Health", icon: "♥", group: "Intelligence" },
+  { id: "tradedesk", label: "Trade Desk", icon: "⤬", group: "Execution" },
+];
+
 /* === custom hook (react-patterns: encapsula estado + efeito) === */
 
 function useEquity() {
@@ -154,91 +172,95 @@ function DashboardTab({ state, lastCycle }: { state: DashboardState; lastCycle: 
 export default function Dashboard() {
   const { state, lastCycle } = useEquity();
   const [tab, setTab] = useState<Tab>("dashboard");
+  const [mode] = useState<"paper" | "live">("paper"); // live locked — MVP paper-only
+  const [connected, setConnected] = useState<boolean | null>(null);
+
+  // Connection status probe
+  useEffect(() => {
+    let active = true;
+    const probe = async () => {
+      try {
+        const res = await fetch("/api/health");
+        if (active) setConnected(res.ok);
+      } catch {
+        if (active) setConnected(false);
+      }
+    };
+    probe();
+    const id = setInterval(probe, 15000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  const groups = Array.from(new Set(NAV.map((n) => n.group)));
 
   return (
-    <div className="app">
-      <header className="header">
-        <div className="brand">
+    <div className="app app--sidebar">
+      <aside className="sidebar">
+        <div className="sidebar__brand">
           <div className="logo">₿</div>
-          <div className="brand__titles">
-            <h1>Crypto Bot</h1>
-            <p>Paper trading · spot · sem risco real</p>
+          <div>
+            <strong>Signal Terminal</strong>
+            <p>day-trader desk</p>
           </div>
         </div>
-        <div className="status">
-          <span className="dot" />
-          ciclo #{lastCycle} · atualizado
+
+        <nav className="sidebar__nav" aria-label="Navegação principal">
+          {groups.map((g) => (
+            <div className="nav-group" key={g}>
+              <span className="nav-group__label">{g}</span>
+              {NAV.filter((n) => n.group === g).map((n) => (
+                <button
+                  key={n.id}
+                  type="button"
+                  aria-current={tab === n.id ? "page" : undefined}
+                  className={`nav-item ${tab === n.id ? "nav-item--active" : ""}`}
+                  onClick={() => setTab(n.id)}
+                >
+                  <span className="nav-item__icon" aria-hidden="true">{n.icon}</span>
+                  <span>{n.label}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
+
+        <div className="sidebar__foot">
+          <div className={`mode-badge mode-badge--${mode}`}>
+            <span className="mode-badge__dot" /> {mode === "paper" ? "PAPER (locked)" : "LIVE"}
+          </div>
+          <div className={`conn-status conn-status--${connected === null ? "unknown" : connected ? "up" : "down"}`}>
+            <span className="conn-status__dot" />
+            {connected === null ? "conectando..." : connected ? "API online" : "API offline"}
+          </div>
         </div>
-      </header>
+      </aside>
 
-      {/* Nav tabs */}
-      <nav className="tabs">
-        <button
-          type="button"
-          className={`tab ${tab === "dashboard" ? "tab--active" : ""}`}
-          onClick={() => setTab("dashboard")}
-        >
-          Dashboard
-        </button>
-        <button
-          type="button"
-          className={`tab ${tab === "browse" ? "tab--active" : ""}`}
-          onClick={() => setTab("browse")}
-        >
-          Browse
-        </button>
-        <button
-          type="button"
-          className={`tab ${tab === "scoring" ? "tab--active" : ""}`}
-          onClick={() => setTab("scoring")}
-        >
-          Scoring
-        </button>
-        <button
-          type="button"
-          className={`tab ${tab === "analyze" ? "tab--active" : ""}`}
-          onClick={() => setTab("analyze")}
-        >
-          Analyze
-        </button>
-        <button
-          type="button"
-          className={`tab ${tab === "health" ? "tab--active" : ""}`}
-          onClick={() => setTab("health")}
-        >
-          Health
-        </button>
-        <button
-          type="button"
-          className={`tab ${tab === "agents" ? "tab--active" : ""}`}
-          onClick={() => setTab("agents")}
-        >
-          Agents
-        </button>
-        <button
-          type="button"
-          className={`tab ${tab === "news" ? "tab--active" : ""}`}
-          onClick={() => setTab("news")}
-        >
-          News
-        </button>
-        <button
-          type="button"
-          className={`tab ${tab === "tradedesk" ? "tab--active" : ""}`}
-          onClick={() => setTab("tradedesk")}
-        >
-          Trade Desk
-        </button>
-      </nav>
+      <main className="main">
+        <header className="header">
+          <div className="brand">
+            <div className="brand__titles">
+              <h1>Crypto Bot</h1>
+              <p>Paper trading · spot · sem risco real</p>
+            </div>
+          </div>
+          <div className="status">
+            <span className="dot" />
+            ciclo #{lastCycle} · atualizado
+          </div>
+        </header>
 
-      {tab === "dashboard" && <DashboardTab state={state} lastCycle={lastCycle} />}
-      {tab === "browse" && <BrowseStrategies />}
-      {tab === "scoring" && <ScorePanel />}
-      {tab === "analyze" && <AnalyzePage />}
-      {tab === "health" && <HealthPanel />}
-      {tab === "agents" && <AgentDesk />}
-      {tab === "news" && <NewsFeed />}
-      {tab === "tradedesk" && <TradeDesk />}
+        {tab === "dashboard" && <DashboardTab state={state} lastCycle={lastCycle} />}
+        {tab === "browse" && <BrowseStrategies />}
+        {tab === "scoring" && <ScorePanel />}
+        {tab === "analyze" && <AnalyzePage />}
+        {tab === "health" && <HealthPanel />}
+        {tab === "agents" && <AgentDesk />}
+        {tab === "news" && <NewsFeed />}
+        {tab === "tradedesk" && <TradeDesk />}
+      </main>
     </div>
   );
 }

@@ -188,6 +188,8 @@ def main():
     ap = argparse.ArgumentParser(description="Paper trading bot (spot, sem risco real)")
     ap.add_argument("--mode", choices=["once", "continuous", "report", "dashboard"], default="once")
     ap.add_argument("--interval", type=int, default=60, help="segundos entre ciclos")
+    ap.add_argument("--host", default="localhost", help="host do servidor (dashboard mode)")
+    ap.add_argument("--port", type=int, default=8000, help="porta do servidor (dashboard mode)")
     ap.add_argument("--strategy", choices=["grid", "grid_dynamic", "combined", "default", "agent_desk"], default=None,
                     help="estrategia (override do config)")
     args = ap.parse_args()
@@ -220,8 +222,8 @@ def main():
             print("Instale dependencias: pip install 'uvicorn[standard]'", file=sys.stderr)
             sys.exit(1)
         from core.strategy_api import app
-        print("=== Servidor unificado (API + Frontend) em http://localhost:8000 ===")
-        uvicorn.run(app, host="localhost", port=8000, log_level="info")
+        print(f"=== Servidor unificado (API + Frontend) em http://{args.host}:{args.port} ===")
+        uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     else:
         print("Modo contínuo (Ctrl+C para parar). Paper only, sem risco real.")
         try:

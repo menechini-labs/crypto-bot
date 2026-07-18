@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 
 from core import config_loader, scoring
 from core import news as news_mod
-from core.strategy_registry import registry
+from core.strategy_registry.registry import get_all
 
 
 @dataclass
@@ -125,7 +125,7 @@ def _risk_agent() -> AgentVerdict:
 
 def _strategy_agent(closes: list[float]) -> AgentVerdict:
     try:
-        strategies = registry.get_all()  # dict: id -> Strategy class
+        strategies = get_all()  # dict: id -> Strategy class
     except Exception:
         strategies = {}
     if not strategies:

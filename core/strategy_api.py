@@ -122,7 +122,7 @@ def start_1m_signal_engine(symbol: str, strategy_name: str, on_signal) -> dict:
     import asyncio
 
     from core.market_ws import WebSocketMarket
-    from core.strategy_registry import get as _get_strategy
+    from core.strategy_registry.registry import get as _get_strategy
 
     key = f'{symbol}|{strategy_name}'
     if key in _1M_ENGINES:

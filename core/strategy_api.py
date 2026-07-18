@@ -33,6 +33,7 @@ from core import agent_desk as _agent_desk
 from core import news as _news
 from core import paper_engine as _paper_engine
 from core.scoring import score_signal as _score_signal, detect_regime as _detect_regime, should_execute
+from core.external_sources import EXTERNAL_SOURCES
 
 logger = logging.getLogger("crypto-bot")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -454,6 +455,12 @@ async def health() -> dict[str, Any]:
         "scoring_available": importlib.util.find_spec("core.scoring") is not None,
         "indicators_available": importlib.util.find_spec("core.indicators") is not None,
     }
+
+
+@app.get("/api/external")
+async def external() -> dict[str, str]:
+    """URLs externas de referência (mcp-api TraderDev)."""
+    return dict(EXTERNAL_SOURCES)
 
 
 @app.get("/api/metrics")

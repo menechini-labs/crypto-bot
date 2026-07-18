@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { fetchStrategies } from "./api";
+import { fetchStrategies, fetchExternalSources } from "./api";
 import BacktestRunner from "./BacktestRunner";
 import FiltersBar from "./FiltersBar";
 import StrategyCard from "./StrategyCard";
@@ -20,6 +20,7 @@ export default function BrowseStrategies() {
   const [filters, setFilters] = useState<Record<string, string | number>>(INIT_FILTERS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [extBrowse, setExtBrowse] = useState<string | null>(null);
 
   function refresh() {
     (async () => {
@@ -37,7 +38,8 @@ export default function BrowseStrategies() {
 
   useEffect(() => {
     refresh();
-    const interval = setInterval(refresh, 30_000); // refresh a cada 30s
+    const interval = setInterval(refresh, 30_000);
+    fetchExternalSources().then(s => setExtBrowse(s.browse)).catch(() => {}); // refresh a cada 30s
     return () => clearInterval(interval);
   }, []);
 
@@ -84,6 +86,11 @@ export default function BrowseStrategies() {
         <div className="browse-actions">
           <button className="btn-secondary" onClick={refresh} title="Recarregar">⟳</button>
           <Link to="/analyze" className="btn-primary">+ Novo Backtest</Link>
+          {extBrowse && (
+            <a href={extBrowse} className="btn-secondary" target="_blank" rel="noopener noreferrer">
+              Browse Externo ↗
+            </a>
+          )}
         </div>
       </header>
 

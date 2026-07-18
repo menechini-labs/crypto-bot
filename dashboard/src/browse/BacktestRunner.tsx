@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { runBacktest } from "./api";
+import { useState, useEffect } from "react";
+import { runBacktest, fetchExternalSources } from "./api";
 import AgentAnalysisCard from "./AgentAnalysisCard";
 import Sparkline from "./Sparkline";
 import type { BacktestParams, BacktestReport, AnalysisResult } from "./types";
@@ -23,6 +23,11 @@ export default function BacktestRunner({ onRun }: Props) {
   const [params, setParams] = useState(INIT);
   const [result, setResult] = useState<BacktestReport | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [extBUrl, setExtBUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchExternalSources().then(s => setExtBUrl(s.backtest)).catch(() => {});
+  }, []);
   const [status, setStatus] = useState<"idle" | "running">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -117,6 +122,14 @@ export default function BacktestRunner({ onRun }: Props) {
       <button type="submit" className="bt-run" disabled={status === "running"}>
         {status === "running" ? "Rodando..." : "Executar"}
       </button>
+
+      {extBUrl && (
+        <div style={{ marginTop: 16 }}>
+          <a href={extBUrl} className="btn-secondary" target="_blank" rel="noopener noreferrer">
+            Relatório Externo ↗
+          </a>
+        </div>
+      )}
 
       {error && (
         <div className="bt-error" role="alert">

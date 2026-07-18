@@ -85,3 +85,11 @@ export async function fetchReflections(
   ).then((r) => r.reflections);
 }
 
+/** External reference URLs (mcp-api TraderDev) */
+export async function fetchExternalSources(): Promise<{
+  backtest: string;
+  browse: string;
+}> {
+  return request<{ backtest: string; browse: string }>("/external");
+}
+

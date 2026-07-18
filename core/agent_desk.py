@@ -14,7 +14,13 @@ DecisionCore. Every agent returns a structured record so the UI can render a
 from __future__ import annotations
 
 import time
+import logging
+
+log = logging.getLogger(__name__)
+
 from dataclasses import dataclass, field
+
+from typing import Any, Dict, List, Optional
 from typing import List, Optional
 
 from core import scoring
@@ -187,16 +193,59 @@ def _decision_core(agents: List[AgentVerdict], closes: List[float]) -> AgentVerd
                         {"regime": regime, "fused_score": conf})
 
 
+def _llm_decision_core(agents: List[AgentVerdict], closes: List[float]) -> AgentVerdict:
+    """LLM-augmented DecisionCore. Uses 9router LLM to fuse agent signals.
+
+    Falls back to rule-based _decision_core if LLM disabled or errors.
+    """
+    from core import llm_client
+    if not llm_client.is_enabled():
+        return _decision_core(agents, closes)
+    ctx = "\n".join(
+        f"- {a.name}: {a.verdict} (conf {a.confidence:.2f}) — {a.reasoning}"
+        for a in agents
+    )
+    prompt = (
+        "You are a crypto day-trading decision core. Given these agent signals, "
+        "decide BUY, SELL or HOLD for BTC/USDT. Reply with one word (buy/sell/hold) "
+        "followed by a confidence 0.0-1.0 and a short reason.\n\n"
+        f"AGENT SIGNALS:\n{ctx}\n\n"
+        "Format: <buy|sell|hold> <0.0-1.0> <reason>"
+    )
+    try:
+        raw = llm_client.chat(prompt, max_tokens=80, temperature=0.2)
+        toks = raw.replace(",", " ").split()
+        word = next((t for t in toks if t in ("buy", "sell", "hold")), "hold")
+        conf_tok = next((t for t in toks if t.replace(".", "").isdigit()), "0.5")
+        try:
+            conf = max(0.0, min(1.0, float(conf_tok)))
+        except ValueError:
+            conf = 0.5
+        reason = f"[LLM] {raw.strip()}"
+        return AgentVerdict("LLMDecisionCore", "fusion-llm", word, round(conf, 3), reason,
+                            {"llm": True, "raw": raw[:200]})
+    except Exception as e:
+        log.warning("LLMDecisionCore fallback (rule-based): %s", e)
+        return _decision_core(agents, closes)
+
+
+def _fetch_fallback_closes() -> list[float]:
+    """Fallback: fetch BTCUSDT 1h closes for agent cycles."""
+    try:
+        from core.market import fetch_ohlcv
+        candles = fetch_ohlcv("BTCUSDT", "1h", 100)
+        return [c["close"] for c in candles]
+    except Exception:
+        return []
+
+
 def run_team(preset: dict, closes: Optional[List[float]] = None) -> dict:
     """Run a cycle using only the agents named in `preset['agents']`.
 
     preset: dict retornado por core.swarm_presets.get_preset()
     """
     if not closes:
-        try:
-            closes = scoring._cached_closes if hasattr(scoring, "_cached_closes") else []
-        except Exception:
-            closes = []
+        closes = _fetch_fallback_closes()
     t0 = time.time()
     allowed = set(preset.get("agents", []))
     # mapa nome -> factory
@@ -208,7 +257,7 @@ def run_team(preset: dict, closes: Optional[List[float]] = None) -> dict:
     }
     all_agents = [registry[n]() for n in allowed if n in registry]
     if "DecisionCore" in allowed:
-        core = _decision_core(all_agents, closes)
+        core = _llm_decision_core(all_agents, closes)
         all_agents.append(core)
     else:
         core = None
@@ -226,10 +275,7 @@ def run_team(preset: dict, closes: Optional[List[float]] = None) -> dict:
 def run_cycle(closes: Optional[List[float]] = None) -> dict:
     """Run a full Agent Desk cycle. Returns serializable dict for the API."""
     if not closes:
-        try:
-            closes = scoring._cached_closes if hasattr(scoring, "_cached_closes") else []
-        except Exception:
-            closes = []
+        closes = _fetch_fallback_closes()
     t0 = time.time()
     agents = [
         _metrics_agent(closes),
@@ -237,7 +283,7 @@ def run_cycle(closes: Optional[List[float]] = None) -> dict:
         _risk_agent(),
         _strategy_agent(closes),
     ]
-    core = _decision_core(agents, closes)
+    core = _llm_decision_core(agents, closes)
     agents.append(core)
     return {
         "status": "ok",

@@ -56,6 +56,10 @@ _KLINES_TTL = 5.0
 _INDICES_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _INDICES_TTL = 60.0
 
+# Cache de backtest pré-populado (Phase 4+)
+# Preenchido no startup: mapeia id-da-estrategia -> dict de métricas
+_BACKTEST_CACHE: dict[str, dict[str, Any]] = {}
+
 
 def _cached_closes(symbol: str, tf: str, limit: int) -> list[float]:
     """Fetch closes from Binance public klines with short TTL cache."""
@@ -88,6 +92,58 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ---------------------------------------------------------------------------
+# Startup: prime backtest cache
+# ---------------------------------------------------------------------------
+
+async def _warm_backtest_cache() -> None:
+    """Roda backtest leve para todas as estratégias conhecidas.
+    Preenche _BACKTEST_CACHE com resultados reais.
+    Falha silenciosa se mercado offline.
+    """
+    try:
+        closes = _cached_closes("BTCUSDT", "1h", 200)
+    except Exception:
+        logger.warning("warm_backtest: sem dados de mercado, pulando")
+        return
+    if len(closes) < 50:
+        return
+
+    from core.config_loader import load_config as _load_cfg
+    cfg = _load_cfg("config.yaml")
+    config = {
+        "initial_cash_usdt": cfg.get("initial_cash_usdt", 10000.0),
+        "fee_pct": cfg.get("fee_pct", 0.001),
+        "max_position_pct": cfg.get("max_position_pct", 0.5),
+        "stop_loss_pct": cfg.get("stop_loss_pct", 0.05),
+        "take_profit_pct": cfg.get("take_profit_pct", 0.10),
+    }
+
+    from core.backtest import run_backtest as _run
+    reg = _registry_get_all()
+    for name in reg:
+        try:
+            result = _run(closes, config, symbol="BTCUSDT", strategy_name=name, use_scoring=(name == "llm"))
+            _BACKTEST_CACHE[name] = {
+                "net_profit_pct": result.get("pnl", 0.0),
+                "profit_factor": result.get("profit_factor"),
+                "max_drawdown_pct": result.get("max_drawdown_pct", 0.0),
+                "win_rate_pct": result.get("win_rate", 0.0),
+                "sharpe": result.get("sharpe"),
+                "sortino": result.get("sortino"),
+                "total_trades": result.get("total_trades", 0),
+                "equity_curve": result.get("equity_curve", []),
+            }
+            logger.info("warm_backtest %s OK pnl=%.2f%%", name, result.get("pnl", 0.0))
+        except Exception as e:
+            logger.warning("warm_backtest %s falhou: %s", name, e)
+
+
+@app.on_event("startup")
+async def _startup_warm_cache():
+    await _warm_backtest_cache()
+
 # ---------------------------------------------------------------------------
 # Estratégias — derivadas do registry real (Phase 0: sem PnL fake)
 # ---------------------------------------------------------------------------
@@ -100,22 +156,24 @@ def _build_strategies_from_registry() -> list[dict[str, Any]]:
     reg = _registry_get_all()
     out: list[dict[str, Any]] = []
     for name in sorted(reg.keys()):
+        cached = _BACKTEST_CACHE.get(name, {})
+        has_bt = bool(cached)
         out.append({
             "id": name,
             "name": name.replace("_", " ").title(),
             "symbol": "BTCUSDT",
             "timeframe": "1h",
             "author": "core",
-            "netProfitPct": None,
-            "profitFactor": None,
-            "maxDrawdownPct": None,
-            "winRatePct": None,
-            "sharpeRatio": None,
-            "sortinoRatio": None,
-            "totalTrades": None,
-            "equityCurve": [],
+            "netProfitPct": cached.get("net_profit_pct") if has_bt else None,
+            "profitFactor": cached.get("profit_factor") if has_bt else None,
+            "maxDrawdownPct": cached.get("max_drawdown_pct") if has_bt else None,
+            "winRatePct": cached.get("win_rate_pct") if has_bt else None,
+            "sharpeRatio": cached.get("sharpe") if has_bt else None,
+            "sortinoRatio": cached.get("sortino") if has_bt else None,
+            "totalTrades": cached.get("total_trades") if has_bt else None,
+            "equityCurve": cached.get("equity_curve", []) if has_bt else [],
             "forkUrl": "",
-            "hasBacktest": False,
+            "hasBacktest": has_bt,
         })
     return out
 

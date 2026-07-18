@@ -15,6 +15,56 @@ from typing import Dict, List, Optional
 from core import market as _market
 from core.risk import RiskManager
 
+# Cache de exchangeInfo por symbol (lot size / min notional / tick).
+_EXCHANGE_INFO_CACHE: Dict[str, dict] = {}
+
+
+def _validate_symbol_filters(symbol: str, qty: float, price: float) -> Optional[str]:
+    """Validate qty vs LOT_SIZE and notional vs MIN_NOTIONAL from Binance exchangeInfo.
+
+    Returns error string if invalid, None if ok/unknown.
+    """
+    sym = symbol.upper()
+    info = _EXCHANGE_INFO_CACHE.get(sym)
+    if info is None:
+        try:
+            data = _market.fetch_exchange_info(sym)
+            filt = {}
+            for f in data.get("filters", []):
+                filt[f.get("filterType")] = f
+            info = filt
+        except Exception:
+            info = {}  # skip validation if unavailable
+        _EXCHANGE_INFO_CACHE[sym] = info
+
+    if not info:
+        return None  # cannot validate; allow
+
+    lot = info.get("LOT_SIZE")
+    if lot:
+        min_qty = float(lot.get("minQty", 0))
+        max_qty = float(lot.get("maxQty", 1e18))
+        step = float(lot.get("stepSize", 0))
+        if qty < min_qty:
+            return f"qty {qty} < minQty {min_qty} (LOT_SIZE)"
+        if qty > max_qty:
+            return f"qty {qty} > maxQty {max_qty} (LOT_SIZE)"
+        if step > 0:
+            from decimal import Decimal
+            try:
+                rem = (Decimal(str(qty)) / Decimal(str(step))) % 1
+                if float(rem) > 1e-9:
+                    return f"qty {qty} nao multiplo de stepSize {step} (LOT_SIZE)"
+            except Exception:
+                pass
+
+    min_notional = info.get("MIN_NOTIONAL")
+    if min_notional:
+        mn = float(min_notional.get("minNotional", 0))
+        if qty * price < mn:
+            return f"notional {qty * price:.2f} < minNotional {mn} (MIN_NOTIONAL)"
+    return None
+
 
 @dataclass
 class Position:
@@ -101,6 +151,11 @@ class PaperEngine:
         price = ticker["price"]
         if price <= 0:
             return {"ok": False, "error": "preco invalido", "order": order.to_dict()}
+
+        # Exchange instrument filters (lot size / min notional / tick size)
+        filter_err = _validate_symbol_filters(order.symbol, order.qty, price)
+        if filter_err:
+            return {"ok": False, "error": f"filtro exchangeInfo: {filter_err}", "order": order.to_dict()}
 
         notional = price * order.qty
         max_notional = self.risk.max_notional(self.cash)

@@ -68,6 +68,23 @@ def fetch_ticker(symbol: str) -> dict:
     }
 
 
+def fetch_exchange_info(symbol: str) -> dict:
+    """Binance exchangeInfo para um symbol (filtros LOT_SIZE / MIN_NOTIONAL etc).
+
+    Retorna dict com "filters" (lista de filtros). Sem auth.
+    """
+    pair = symbol.replace("/", "").upper()
+    url = f"https://api.binance.com/api/v3/exchangeInfo?symbol={pair}"
+    req = urllib.request.Request(url, headers={"User-Agent": "crypto-bot-paper/0.1"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            raw = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"exchangeInfo fetch failed for {symbol}: {e}") from e
+    syms = raw.get("symbols") or []
+    return syms[0] if syms else {"filters": []}
+
+
 def fetch_depth(symbol: str, limit: int = 50) -> dict:
     """Order book (bids/asks) via API pública Binance (sem auth).
 

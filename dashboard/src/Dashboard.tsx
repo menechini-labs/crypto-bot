@@ -1,15 +1,16 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import AgentDesk from "./AgentDesk";
+import { ApiError, apiGet } from "./api";
+import AnalyzePage from "./browse/AnalyzePage";
+import { fetchMode, type ModeState, setMode } from "./browse/api";
 import BrowseStrategies from "./browse/BrowseStrategies";
 import EquityChart from "./EquityChart";
-import StatCard from "./StatCard";
-import ScorePanel from "./ScorePanel";
-import AnalyzePage from "./browse/AnalyzePage";
 import HealthPanel from "./HealthPanel";
-import AgentDesk from "./AgentDesk";
 import NewsFeed from "./NewsFeed";
+import ScorePanel from "./ScorePanel";
+import { PanelSkeleton, StatCardSkeleton } from "./Skeleton";
+import StatCard from "./StatCard";
 import TradeDesk from "./TradeDesk";
-import { fetchMode, setMode, type ModeState } from "./browse/api";
-import { apiGet, ApiError } from "./api";
 import type { DashboardState, EquityPoint, PortfolioStats } from "./types";
 
 /* === helpers === */
@@ -36,7 +37,15 @@ function computeStats(data: EquityPoint[]): PortfolioStats {
 
 /* === tabs === */
 
-type Tab = "dashboard" | "browse" | "scoring" | "analyze" | "health" | "agents" | "news" | "tradedesk";
+type Tab =
+  | "dashboard"
+  | "browse"
+  | "scoring"
+  | "analyze"
+  | "health"
+  | "agents"
+  | "news"
+  | "tradedesk";
 
 interface NavItem {
   id: Tab;
@@ -72,7 +81,12 @@ function useEquity() {
         if (json.length > 0) setLastCycle(json[json.length - 1].cycle);
       } catch (e) {
         if (active) {
-          const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "erro desconhecido";
+          const msg =
+            e instanceof ApiError
+              ? e.message
+              : e instanceof Error
+                ? e.message
+                : "erro desconhecido";
           setState({ status: "error", error: msg });
         }
       }
@@ -93,9 +107,16 @@ function useEquity() {
 function DashboardTab({ state, lastCycle }: { state: DashboardState; lastCycle: number }) {
   if (state.status === "loading") {
     return (
-      <div className="loading" style={{ marginTop: "2rem" }}>
-        Carregando...
-      </div>
+      <>
+        <section className="cards">
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </section>
+        <PanelSkeleton lines={3} />
+        <PanelSkeleton lines={2} />
+      </>
     );
   }
 
@@ -172,7 +193,17 @@ function DashboardTab({ state, lastCycle }: { state: DashboardState; lastCycle: 
 export default function Dashboard({ initialTab }: { initialTab?: Tab }) {
   const { state, lastCycle } = useEquity();
   const [tab, setTab] = useState<Tab>(initialTab || "dashboard");
-  const [mode, setModeState] = useState<ModeState>({ mode: "demo", real_available: false, real_active: false });
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const handleTabChange = useCallback((id: Tab) => {
+    setTab(id);
+    setSidebarOpen(false);
+  }, []);
+  const [mode, setModeState] = useState<ModeState>({
+    mode: "demo",
+    real_available: false,
+    real_active: false,
+  });
   const [connected, setConnected] = useState<boolean | null>(null);
   const [confirmReal, setConfirmReal] = useState(false);
   const [modeError, setModeError] = useState<string | null>(null);
@@ -186,7 +217,9 @@ export default function Dashboard({ initialTab }: { initialTab?: Tab }) {
     }
   };
 
-  useEffect(() => { loadMode(); }, []);
+  useEffect(() => {
+    loadMode();
+  }, []);
 
   // Connection status probe
   useEffect(() => {
@@ -220,7 +253,11 @@ export default function Dashboard({ initialTab }: { initialTab?: Tab }) {
     setModeError(null);
     try {
       const m = await setMode("real");
-      setModeState((prev) => ({ ...prev, mode: m.mode as "demo" | "real", real_active: m.real_active }));
+      setModeState((prev) => ({
+        ...prev,
+        mode: m.mode as "demo" | "real",
+        real_active: m.real_active,
+      }));
     } catch (e) {
       setModeError(e instanceof Error ? e.message : "falha ao ativar REAL");
     }
@@ -230,7 +267,11 @@ export default function Dashboard({ initialTab }: { initialTab?: Tab }) {
     setModeError(null);
     try {
       const m = await setMode("demo");
-      setModeState((prev) => ({ ...prev, mode: m.mode as "demo" | "real", real_active: m.real_active }));
+      setModeState((prev) => ({
+        ...prev,
+        mode: m.mode as "demo" | "real",
+        real_active: m.real_active,
+      }));
     } catch (e) {
       setModeError(e instanceof Error ? e.message : "falha ao ativar DEMO");
     }
@@ -240,7 +281,26 @@ export default function Dashboard({ initialTab }: { initialTab?: Tab }) {
 
   return (
     <div className="app app--sidebar">
-      <aside className="sidebar">
+      {/* Hamburger — mobile only */}
+      <button
+        type="button"
+        className="hamburger"
+        aria-label={sidebarOpen ? "Fechar menu" : "Abrir menu"}
+        aria-expanded={sidebarOpen}
+        onClick={() => setSidebarOpen((o) => !o)}
+      >
+        <span className="hamburger__line" />
+        <span className="hamburger__line" />
+        <span className="hamburger__line" />
+      </button>
+
+      <aside className={`sidebar ${sidebarOpen ? "sidebar--open" : ""}`}>
+        {/* Overlay click fecha */}
+        <div
+          className="sidebar__overlay"
+          onClick={() => setSidebarOpen(false)}
+          role="presentation"
+        />
         <div className="sidebar__brand">
           <div className="logo">₿</div>
           <div>
@@ -259,9 +319,11 @@ export default function Dashboard({ initialTab }: { initialTab?: Tab }) {
                   type="button"
                   aria-current={tab === n.id ? "page" : undefined}
                   className={`nav-item ${tab === n.id ? "nav-item--active" : ""}`}
-                  onClick={() => setTab(n.id)}
+                  onClick={() => handleTabChange(n.id)}
                 >
-                  <span className="nav-item__icon" aria-hidden="true">{n.icon}</span>
+                  <span className="nav-item__icon" aria-hidden="true">
+                    {n.icon}
+                  </span>
                   <span>{n.label}</span>
                 </button>
               ))}
@@ -290,7 +352,9 @@ export default function Dashboard({ initialTab }: { initialTab?: Tab }) {
             </button>
           )}
           {modeError && <p className="mode-error">{modeError}</p>}
-          <div className={`conn-status conn-status--${connected === null ? "unknown" : connected ? "up" : "down"}`}>
+          <div
+            className={`conn-status conn-status--${connected === null ? "unknown" : connected ? "up" : "down"}`}
+          >
             <span className="conn-status__dot" />
             {connected === null ? "conectando..." : connected ? "API online" : "API offline"}
           </div>
@@ -298,14 +362,26 @@ export default function Dashboard({ initialTab }: { initialTab?: Tab }) {
       </aside>
 
       {confirmReal && (
-        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Confirmar REAL mode">
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirmar REAL mode"
+        >
           <div className="modal">
             <h3>Ativar REAL mode?</h3>
-            <p>REAL ativa execução paper a preço de mercado real da Binance. SL/TP e risk guard continuam ativos.</p>
+            <p>
+              REAL ativa execução paper a preço de mercado real da Binance. SL/TP e risk guard
+              continuam ativos.
+            </p>
             <p className="muted">Nenhuma ordem real é enviada a nenhuma exchange.</p>
             <div className="modal__actions">
-              <button type="button" className="btn-ghost" onClick={() => setConfirmReal(false)}>Cancelar</button>
-              <button type="button" className="btn-danger" onClick={confirmSwitchReal}>Ativar REAL</button>
+              <button type="button" className="btn-ghost" onClick={() => setConfirmReal(false)}>
+                Cancelar
+              </button>
+              <button type="button" className="btn-danger" onClick={confirmSwitchReal}>
+                Ativar REAL
+              </button>
             </div>
           </div>
         </div>
@@ -316,7 +392,11 @@ export default function Dashboard({ initialTab }: { initialTab?: Tab }) {
           <div className="brand">
             <div className="brand__titles">
               <h1>Crypto Bot</h1>
-              <p>{mode.mode === "demo" ? "DEMO · observação · sem execução" : "REAL · paper exec · preço live"}</p>
+              <p>
+                {mode.mode === "demo"
+                  ? "DEMO · observação · sem execução"
+                  : "REAL · paper exec · preço live"}
+              </p>
             </div>
           </div>
           <div className="status">

@@ -12,11 +12,12 @@ Uso:
   for v in team["agents"]:
       print(f"  - {v}")
 """
+
 from __future__ import annotations
 
 import logging
 
-logger = logging.getLogger("crypto-bot")
+logger = logging.getLogger('crypto-bot')
 
 _PRESETS: dict[str, dict] = {}
 
@@ -29,11 +30,11 @@ def _preset(
     behaviors: dict | None = None,
 ) -> dict:
     p = {
-        "name": name,
-        "agents": agents,
-        "strategy_focus": focus,
-        "description": description,
-        "behaviors": behaviors or {},
+        'name': name,
+        'agents': agents,
+        'strategy_focus': focus,
+        'description': description,
+        'behaviors': behaviors or {},
     }
     _PRESETS[name] = p
     return p
@@ -42,57 +43,105 @@ def _preset(
 # ── Presets ──────────────────────────────────────────────────────────
 
 _crypto_trading_desk = _preset(
-    "crypto_trading_desk",
-    ["MetricsAgent", "NewsAgent", "RiskAgent", "StrategyAgent", "DecisionCore"],
-    "crypto",
-    "Time cripto completo: lê regime, volatilidade, notícias, risco, "
-    "ranqueia estratégia e decide compra/venda/hold com score de confiança.",
-    {"bars_lookback_h": 24, "min_confidence": 0.5},
+    'crypto_trading_desk',
+    ['MetricsAgent', 'NewsAgent', 'RiskAgent', 'StrategyAgent', 'DecisionCore'],
+    'crypto',
+    'Time cripto completo: lê regime, volatilidade, notícias, risco, '
+    'ranqueia estratégia e decide compra/venda/hold com score de confiança.',
+    {'bars_lookback_h': 24, 'min_confidence': 0.5},
 )
 
 _investment_committee = _preset(
-    "investment_committee",
-    ["MetricsAgent", "StrategyAgent", "RiskAgent", "DecisionCore"],
-    "lateral",
-    "Comitê de investimento para regimes laterais ou de baixa volatilidade. "
-    "Foco em preservação de capital e entradas seletivas.",
-    {"min_confidence": 0.65, "bars_lookback_h": 48},
+    'investment_committee',
+    ['MetricsAgent', 'StrategyAgent', 'RiskAgent', 'DecisionCore'],
+    'lateral',
+    'Comitê de investimento para regimes laterais ou de baixa volatilidade. '
+    'Foco em preservação de capital e entradas seletivas.',
+    {'min_confidence': 0.65, 'bars_lookback_h': 48},
 )
 
 _quant_desk = _preset(
-    "quant_desk",
-    ["MetricsAgent", "StrategyAgent"],
-    "uptrend",
-    "Desk quant focado em extrair alpha de tendência. "
-    "Pula NewsAgent e RiskAgent — assume risco gerenciado externamente.",
-    {"bars_lookback_h": 168, "min_confidence": 0.4},
+    'quant_desk',
+    ['MetricsAgent', 'StrategyAgent'],
+    'uptrend',
+    'Desk quant focado em extrair alpha de tendência. '
+    'Pula NewsAgent e RiskAgent — assume risco gerenciado externamente.',
+    {'bars_lookback_h': 168, 'min_confidence': 0.4},
 )
 
 _risk_committee = _preset(
-    "risk_committee",
-    ["RiskAgent", "MetricsAgent", "DecisionCore"],
-    "downtrend",
-    "Comitê de risco ativado em regimes de baixa. "
-    "Prioriza stops, reduz exposição, sugere hedge / cash.",
-    {"min_confidence": 0.75, "bars_lookback_h": 12, "max_exposure_pct": 0.3},
+    'risk_committee',
+    ['RiskAgent', 'MetricsAgent', 'DecisionCore'],
+    'downtrend',
+    'Comitê de risco ativado em regimes de baixa. '
+    'Prioriza stops, reduz exposição, sugere hedge / cash.',
+    {'min_confidence': 0.75, 'bars_lookback_h': 12, 'max_exposure_pct': 0.3},
 )
 
 _scalping_desk = _preset(
-    "scalping_desk",
-    ["MetricsAgent", "NewsAgent", "RiskAgent", "StrategyAgent", "DecisionCore"],
-    "crypto",
-    "Time de scalping: janela curta (1h), notícias em tempo real, "
-    "entradas e saídas rápidas. Confiança mínima reduzida p/ capturar micro-movimentos.",
-    {"bars_lookback_h": 4, "min_confidence": 0.25},
+    'scalping_desk',
+    ['MetricsAgent', 'NewsAgent', 'RiskAgent', 'StrategyAgent', 'DecisionCore'],
+    'crypto',
+    'Time de scalping: janela curta (1h), notícias em tempo real, '
+    'entradas e saídas rápidas. Confiança mínima reduzida p/ capturar micro-movimentos.',
+    {'bars_lookback_h': 4, 'min_confidence': 0.25},
 )
 
 _hedge_desk = _preset(
-    "hedge_desk",
-    ["RiskAgent", "MetricsAgent"],
-    "lateral",
-    "Desk de hedge: monitora exposição e correlação entre ativos. "
-    "Apenas análise — não emite sinais de compra.",
-    {"bars_lookback_h": 168, "analysis_only": True},
+    'hedge_desk',
+    ['RiskAgent', 'MetricsAgent'],
+    'lateral',
+    'Desk de hedge: monitora exposição e correlação entre ativos. '
+    'Apenas análise — não emite sinais de compra.',
+    {'bars_lookback_h': 168, 'analysis_only': True},
+)
+
+# ── Day-trade templates (referencing new 1m strategy templates) ──────
+# Cada preset nomeia a estratégia (behaviors.strategy) para o loop usar.
+
+_daytrade_scalping = _preset(
+    'daytrade_scalping',
+    ['MetricsAgent', 'RiskAgent', 'StrategyAgent', 'DecisionCore'],
+    'scalping',
+    'Template day-trade SCALPING (1m): entra acima do VWAP com RSI saindo de '
+    'oversold + cruzamento %K>%D. Saída rápida abaixo do VWAP.',
+    {'strategy': 'scalping', 'interval': '1m', 'bars_lookback_h': 1, 'min_confidence': 0.55},
+)
+
+_daytrade_breakout = _preset(
+    'daytrade_breakout',
+    ['MetricsAgent', 'RiskAgent', 'StrategyAgent', 'DecisionCore'],
+    'breakout',
+    'Template day-trade BREAKOUT (1m): rompe máxima recente com expansão de '
+    'volatilidade (ATR). Sai no retorno ao VWAP.',
+    {'strategy': 'breakout', 'interval': '1m', 'bars_lookback_h': 1, 'min_confidence': 0.6},
+)
+
+_daytrade_mean_reversion = _preset(
+    'daytrade_mean_reversion',
+    ['MetricsAgent', 'RiskAgent', 'StrategyAgent', 'DecisionCore'],
+    'mean_reversion',
+    'Template day-trade MEAN-REVERSION (1m): compra na banda inferior de Bollinger '
+    '+ %K oversold; vende na banda superior.',
+    {'strategy': 'mean_reversion', 'interval': '1m', 'bars_lookback_h': 1, 'min_confidence': 0.55},
+)
+
+_daytrade_range_bound = _preset(
+    'daytrade_range_bound',
+    ['MetricsAgent', 'RiskAgent', 'StrategyAgent', 'DecisionCore'],
+    'range_bound',
+    'Template day-trade RANGE-BOUND (1m): compra no suporte, vende na resistência '
+    'em regime lateral.',
+    {'strategy': 'range_bound', 'interval': '1m', 'bars_lookback_h': 1, 'min_confidence': 0.5},
+)
+
+_daytrade_contrarian = _preset(
+    'daytrade_contrarian',
+    ['MetricsAgent', 'RiskAgent', 'StrategyAgent', 'DecisionCore'],
+    'contrarian',
+    'Template day-trade CONTRARIAN (1m): contraria extremos de RSI/MACD esticados '
+    '(sobrevenda/sobrecompra).',
+    {'strategy': 'contrarian', 'interval': '1m', 'bars_lookback_h': 1, 'min_confidence': 0.55},
 )
 
 
@@ -100,10 +149,10 @@ def list_presets() -> list[dict]:
     """Retorna lista de presets disponíveis."""
     return [
         {
-            "name": p["name"],
-            "description": p["description"],
-            "strategy_focus": p["strategy_focus"],
-            "agents": p["agents"],
+            'name': p['name'],
+            'description': p['description'],
+            'strategy_focus': p['strategy_focus'],
+            'agents': p['agents'],
         }
         for p in _PRESETS.values()
     ]

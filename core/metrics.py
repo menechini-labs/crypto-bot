@@ -1,7 +1,7 @@
 import logging
 
-logger = logging.getLogger("crypto-bot")
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger('crypto-bot')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
 
 """Métricas de qualidade de estratégia (stdlib, sem numpy).
@@ -22,7 +22,10 @@ Bootstrap CI 95% para Sharpe (1 000 reamostragens, stdlib random).
 import math
 import random
 
-def _bootstrap_sharpe_ci(rets: list[float], periods_per_year: int, n_iter: int = 1000) -> tuple[float, float]:
+
+def _bootstrap_sharpe_ci(
+    rets: list[float], periods_per_year: int, n_iter: int = 1000
+) -> tuple[float, float]:
     """Retorna (lower, upper) 95% CI para Sharpe via bootstrap."""
     if not rets:
         return (0.0, 0.0)
@@ -57,14 +60,16 @@ def compute_metrics(
     trades: int = 0,
     bootstrap: bool = False,
 ) -> dict:
-    logger.info("compute_metrics equity_len=%d trades=%d bootstrap=%s", len(equity), trades, bootstrap)
+    logger.info(
+        'compute_metrics equity_len=%d trades=%d bootstrap=%s', len(equity), trades, bootstrap
+    )
     """Calcula métricas de qualidade da curva de equity.
 
     Retorna: sharpe, cagr, max_drawdown, win_rate.
     Se bootstrap=True, adiciona sharpe_ci=(lower, upper) 95%.
     """
     if len(equity) < 2:
-        raise ValueError("equity precisa de pelo menos 2 pontos")
+        raise ValueError('equity precisa de pelo menos 2 pontos')
 
     rets = _returns(equity)
     n = len(rets)
@@ -102,11 +107,11 @@ def compute_metrics(
     win_rate = (wins / trades) if trades > 0 else 0.0
 
     out = {
-        "sharpe": sharpe,
-        "cagr": cagr,
-        "max_drawdown": max_dd,
-        "win_rate": win_rate,
+        'sharpe': sharpe,
+        'cagr': cagr,
+        'max_drawdown': max_dd,
+        'win_rate': win_rate,
     }
     if bootstrap:
-        out["sharpe_ci"] = list(_bootstrap_sharpe_ci(rets, periods_per_year))
+        out['sharpe_ci'] = list(_bootstrap_sharpe_ci(rets, periods_per_year))
     return out

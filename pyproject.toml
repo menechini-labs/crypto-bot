@@ -27,6 +27,16 @@ package = false
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+exclude = [
+  ".lint-venv",
+  ".venv",
+  ".agents",
+  "_bmad",
+  ".ruff_cache",
+  ".opencode",
+  "_bmad-output",
+  ".specify",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "A", "C4", "SIM", "N", "UP", "S", "T20", "ARG", "PTH", "ERA", "PL", "TRY"]
@@ -60,6 +70,15 @@ ignore = [
   "B007",    # unused loop variable in tests (range-based setup loops)
   "PLR0915", # too many statements: backtest/reflection engines are inherently large
   "PLR0912", # too many branches: backtest/reflection engines are inherently branched
+  "S110",    # bare except-pass: expected in live ws/retry loops (network resilience)
+  "S112",    # try-except-continue: same rationale as S110
+  "PLW2901", # loop var overwritten: intentional reuse in parsing loops
+  "SIM102",  # nested if: readability choice in strategy code
+  "PLR0911", # many returns: dispatch/engine functions by design
+  "PLW0108", # lambda wrapper: intentional adapter in agent_desk
+  "PLW0602", # module-level global read (agent loop config)
+  "PLW0603", # module-level global writes (agent loop runtime state)
+  "S314",    # xml RSS parse: trusted news feed, defusedxml not required
 ]
 fixable = ["ALL"]
 unfixable = ["T20"]
@@ -83,7 +102,11 @@ addopts = "-q --strict-markers"
 asyncio_mode = "auto"
 
 [tool.pyright]
+venvPath = "."
+venv = ".lint-venv"
+include = ["core", "cli.py", "run_api.py", "tests"]
+pythonVersion = "3.11"
+pythonPlatform = "Linux"
 reportMissingImports = "warning"
 reportMissingTypeStubs = "warning"
 typeCheckingMode = "basic"
-pythonVersion = "3.11"

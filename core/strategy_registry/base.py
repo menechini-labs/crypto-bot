@@ -13,10 +13,12 @@ class BaseStrategy(ABC):
     Estratégias NUNCA executam ordens — apenas sugerem.
     """
 
-    name: str = "base"
+    name: str = 'base'
 
     @abstractmethod
-    def decide(self, closes: list[float], has_position: bool, ctx: dict[str, Any] | None = None) -> str:
+    def decide(
+        self, closes: list[float], has_position: bool, ctx: dict[str, Any] | None = None
+    ) -> str:
         """Retorna 'buy', 'sell' ou 'hold'."""
         raise NotImplementedError
 

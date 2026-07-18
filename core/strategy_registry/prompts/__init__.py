@@ -53,8 +53,8 @@ Reply exactly: ALLOW, or REJECT: <one-sentence reason>.
 
 def get_prompt(name: str) -> str:
     """Return prompt template by name."""
-    if name == "default_llm":
+    if name == 'default_llm':
         return DEFAULT_LLM_PROMPT
-    if name == "risk_guard":
+    if name == 'risk_guard':
         return RISK_GUARD_PROMPT
-    raise ValueError(f"Unknown prompt name: {name}")
+    raise ValueError(f'Unknown prompt name: {name}')

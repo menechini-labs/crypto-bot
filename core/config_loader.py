@@ -9,6 +9,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(me
 import os
 
 
+# AI-Trader integration config from env vars
+AI_TRADER_ENABLED = os.environ.get("AI_TRADER_ENABLED", "").lower() in ("1", "true", "yes")
+AI_TRADER_PUBLISH_CONFIDENCE = float(os.environ.get("AI_TRADER_PUBLISH_CONFIDENCE", "0.65"))
+
+
 def load_config(path: str | None = None) -> dict[str, Any]:
     if path is None:
         # config.yaml fica na raiz do projeto (um nivel acima de core/)

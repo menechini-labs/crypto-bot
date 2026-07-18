@@ -25,6 +25,41 @@ from core import config_loader, scoring
 from core import news as news_mod
 from core.strategy_registry.registry import get_all
 
+# AI-Trader publication
+_ai_trader_publication_enabled = config_loader.AI_TRADER_ENABLED
+
+
+def _publish_to_ai_trader(
+    verdict: str,
+    conf: float,
+    symbol: str,
+    reasoning: str,
+) -> None:
+    """Publish decision to AI-Trader if configured and threshold met."""
+    if not _ai_trader_publication_enabled:
+        return
+    try:
+        from core.ai_trader_client import get_ai_trader_client
+        cli = get_ai_trader_client()
+        if not cli.config.token or not cli.config.enabled:
+            return
+        market = "crypto"
+        # map buy/sell to action
+        action = verdict  # buy or sell
+        # strip USDT suffix for AI-Trader symbols
+        sym = symbol.replace("USDT", "") if symbol.endswith("USDT") else symbol
+        cli.publish_realtime(
+            market=market,
+            action=action,
+            symbol=sym,
+            price=0,  # auto-price
+            quantity=0.01,  # small default, platform simulates
+            content=f"CryptoBot-BR signal: {reasoning[:200]}",
+            executed_at="now",
+        )
+    except Exception as exc:
+        log.warning("AI-Trader publish failed: %s", exc)
+
 
 @dataclass
 class AgentVerdict:
@@ -543,6 +578,10 @@ def execute_cycle(
             else f'decisao {verdict} ignorada (conf={conf:.2f})',
         }
         return cycle
+
+    # Publish to AI-Trader if threshold met
+    if conf >= 0.65 and verdict in ('buy', 'sell'):
+        _publish_to_ai_trader(verdict, conf, symbol, decision.get('reasoning', ''))
 
     # REAL mode: submit order
     from core import paper_engine as _paper

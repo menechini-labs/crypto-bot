@@ -107,7 +107,7 @@ Plus: **idempotency** (`request_id` + TTL), **trailing stop to break-even**, **A
 - `core/risk.py` ordered gate + idempotency + trailing stop.
 - `/api/positions`, `/api/orders`, `/api/risk/state`. Trade Desk UI.
 
-**Phase 4 — Polish**
+**Phase 4 — Polish** — **DONE (2026-07-17)** ver `frontend-phase4-plan.md`.
 - Unified sidebar nav; paper/live toggle (paper-locked); connection status; a11y pass.
 
 ## 6. Decisions / constraints

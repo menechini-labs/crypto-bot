@@ -34,6 +34,7 @@ class WebSocketMarket:
         self._task: asyncio.Task | None = None
         # Hook opcional: callable(candle) chamado a cada vela recebida (fechada ou não).
         self.candle_listener: Callable[[dict], None] | None = None
+        self._event_bus = None  # Lazy import no _receive_loop
 
     async def connect(self) -> None:
         """Establish WS connection and start background receive loop."""
@@ -83,9 +84,23 @@ class WebSocketMarket:
                     'resistance': res,
                 }
 
+                # Event bus dispatch
+                if self._event_bus is not None:
+                    event = {
+                        'type': 'candle',
+                        'symbol': self.symbol,
+                        'candle': candle,
+                        'ctx': ctx,
+                    }
+                    await self._event_bus.emit('candle', event)
+
                 # Dispatch to strategies (plugin-style) somente quando um
                 # strategy_name explícito é informado (evita auto-fire global).
                 if self.strategy_name is not None:
+                    from .event_bus import get_global_bus
+
+                    self._event_bus = get_global_bus()
+
                     strategies = get_all()
                     for name, strat_cls in strategies.items():
                         if name != self.strategy_name:
@@ -94,9 +109,23 @@ class WebSocketMarket:
                         if hasattr(strategy, 'on_new_candle'):
                             asyncio.create_task(strategy.on_new_candle(self.cache))
                         else:
-                            # Synchronous decide for non-async strategies
                             signal = strategy.decide(closes[-10:], has_position=False, ctx=ctx)
                             log.info('Strategy %s signal: %s', name, signal)
+
+                            # Track signal_str from the matched strategy
+                            if signal:
+                                signal_str = signal.get('signal', 'hold') if isinstance(signal, dict) else str(signal)
+
+                    # Emit signal event
+                    if signal_str and self._event_bus is not None:
+                        sig_event = {
+                            'type': 'signal',
+                            'symbol': self.symbol,
+                            'strategy': self.strategy_name,
+                            'signal': signal_str,
+                            'ctx': ctx,
+                        }
+                        await self._event_bus.emit('signal', sig_event)
 
                 await asyncio.sleep(0)
                 log.debug('Cycle processed; cache len=%d', len(self.cache))

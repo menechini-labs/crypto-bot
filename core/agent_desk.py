@@ -46,6 +46,26 @@ class AgentVerdict:
         }
 
 
+@dataclass
+class GuardResult:
+    passed: bool
+    adjustments: list[str]
+    original_verdict: str
+    original_confidence: float
+    adjusted_verdict: str
+    adjusted_confidence: float
+
+    def to_dict(self) -> dict:
+        return {
+            'passed': self.passed,
+            'adjustments': self.adjustments,
+            'original_verdict': self.original_verdict,
+            'original_confidence': round(self.original_confidence, 3),
+            'adjusted_verdict': self.adjusted_verdict,
+            'adjusted_confidence': round(self.adjusted_confidence, 3),
+        }
+
+
 def _metrics_agent(closes: list[float]) -> AgentVerdict:
     if not closes or len(closes) < 20:
         return AgentVerdict(
@@ -290,9 +310,23 @@ def run_team(preset: dict, closes: list[float] | None = None) -> dict:
         'StrategyAgent': lambda: _strategy_agent(closes),
     }
     all_agents = [registry[n]() for n in allowed if n in registry]
+    guard_dict = None
     if 'DecisionCore' in allowed:
         core = _llm_decision_core(all_agents, closes)
         all_agents.append(core)
+        guard = _post_classification_guard(
+            core,
+            closes,
+            metrics_agent=next((a for a in all_agents if a.name == 'MetricsAgent'), None),
+            news_agent=next((a for a in all_agents if a.name == 'NewsAgent'), None),
+        )
+        if guard.adjustments:
+            core.verdict = guard.adjusted_verdict
+            core.confidence = guard.adjusted_confidence
+            core.reasoning += f' | Guard: {"; ".join(guard.adjustments)}'
+            core.metrics['guard_passed'] = guard.passed
+            core.metrics['guard_adjustments'] = guard.adjustments
+        guard_dict = guard.to_dict()
     else:
         core = None
     return {
@@ -303,7 +337,76 @@ def run_team(preset: dict, closes: list[float] | None = None) -> dict:
         'paper_only': True,
         'agents': [a.to_dict() for a in all_agents],
         'decision': core.to_dict() if core else None,
+        'guard': guard_dict,
     }
+
+
+def _post_classification_guard(
+    decision: AgentVerdict,
+    closes: list[float],
+    metrics_agent: AgentVerdict | None = None,
+    news_agent: AgentVerdict | None = None,
+) -> GuardResult:
+    """Valida o veredito pós-classificação antes da execução.
+
+    Aplica 3 verificações:
+    1. Regime contradiction: sinal compra em downtrend ou venda em uptrend reduz confiança
+    2. Volatility gate: volatilidade extrema + sinal agressivo -> rebaixa para hold
+    3. Confidence proximity: confiança próxima do threshold 0.5 -> registra warning
+    """
+    adjustments: list[str] = []
+    adj_verdict = decision.verdict
+    adj_conf = decision.confidence
+
+    regime = 'unknown'
+    vol = 0.0
+    if metrics_agent and hasattr(metrics_agent, 'metrics'):
+        regime = metrics_agent.metrics.get('regime', 'unknown')
+        vol = metrics_agent.metrics.get('volatility', 0.0)
+
+    if regime == 'downtrend' and adj_verdict == 'buy':
+        adj_conf *= 0.6
+        adjustments.append(
+            f'regime_contradiction: buy em downtrend, confianca reduzida {decision.confidence:.2f} -> {adj_conf:.2f}'
+        )
+    elif regime == 'uptrend' and adj_verdict == 'sell':
+        adj_conf *= 0.6
+        adjustments.append(
+            f'regime_contradiction: sell em uptrend, confianca reduzida {decision.confidence:.2f} -> {adj_conf:.2f}'
+        )
+
+    if vol > 0.05 and adj_verdict in ('buy', 'sell'):
+        adj_verdict = 'hold'
+        adj_conf *= 0.5
+        adjustments.append(
+            f'volatility_gate: volatilidade {vol:.2%} > 5%, sinal {decision.verdict} rebaixado para hold'
+        )
+
+    threshold_dist = abs(adj_conf - 0.5)
+    if threshold_dist < 0.1 and adj_verdict in ('buy', 'sell'):
+        adjustments.append(
+            f'confidence_proximity: confianca {adj_conf:.2f} muito proxima do threshold 0.5'
+        )
+
+    if adj_verdict in ('buy', 'sell') and adj_conf < 0.5:
+        adj_verdict = 'hold'
+        adjustments.append(
+            f'confidence_floor: confianca {adj_conf:.2f} abaixo de 0.5, rebaixado para hold'
+        )
+
+    if adj_verdict == 'hold' and decision.verdict != 'hold':
+        adj_conf = min(adj_conf, 0.45)
+
+    adj_conf = max(0.0, min(1.0, adj_conf))
+    passed = adj_verdict == decision.verdict and adj_conf >= decision.confidence * 0.8
+    return GuardResult(
+        passed=passed,
+        adjustments=adjustments,
+        original_verdict=decision.verdict,
+        original_confidence=decision.confidence,
+        adjusted_verdict=adj_verdict,
+        adjusted_confidence=adj_conf,
+    )
 
 
 def run_cycle(closes: list[float] | None = None) -> dict:
@@ -319,6 +422,18 @@ def run_cycle(closes: list[float] | None = None) -> dict:
     ]
     core = _llm_decision_core(agents, closes)
     agents.append(core)
+    guard = _post_classification_guard(
+        core,
+        closes,
+        metrics_agent=next((a for a in agents if a.name == 'MetricsAgent'), None),
+        news_agent=next((a for a in agents if a.name == 'NewsAgent'), None),
+    )
+    if guard.adjustments:
+        core.verdict = guard.adjusted_verdict
+        core.confidence = guard.adjusted_confidence
+        core.reasoning += f' | Guard: {"; ".join(guard.adjustments)}'
+        core.metrics['guard_passed'] = guard.passed
+        core.metrics['guard_adjustments'] = guard.adjustments
     return {
         'status': 'ok',
         'cycle_id': int(t0 * 1000),
@@ -326,6 +441,7 @@ def run_cycle(closes: list[float] | None = None) -> dict:
         'paper_only': True,
         'agents': [a.to_dict() for a in agents],
         'decision': core.to_dict(),
+        'guard': guard.to_dict(),
     }
 
 

@@ -21,9 +21,25 @@ NEWS_FEEDS = [
         'id': 'coindesk',
         'name': 'CoinDesk',
         'url': 'https://www.coindesk.com/arc/outboundfeeds/rss/',
+        'reliability': 0.8,
     },
-    {'id': 'cointelegraph', 'name': 'Cointelegraph', 'url': 'https://cointelegraph.com/rss'},
+    {
+        'id': 'cointelegraph',
+        'name': 'Cointelegraph',
+        'url': 'https://cointelegraph.com/rss',
+        'reliability': 0.6,
+    },
+    {
+        'id': 'cryptocompare',
+        'name': 'CryptoCompare',
+        'url': 'https://www.cryptocompare.com/media/news/feed',
+        'reliability': 0.7,
+    },
 ]
+
+SOURCE_RELIABILITY: dict[str, float] = {
+    f['id']: f.get('reliability', 0.5) for f in NEWS_FEEDS
+}
 
 # Sentiment lexicon (simple, English). Positive / negative weight words.
 POSITIVE = [
@@ -113,6 +129,7 @@ class NewsItem:
     source: str
     title: str
     url: str
+    source_id: str
     published: str
     sentiment: str  # "positive" | "negative" | "neutral"
     score: float
@@ -124,6 +141,7 @@ class NewsItem:
             'source': self.source,
             'title': self.title,
             'url': self.url,
+            'source_id': self.source_id,
             'published': self.published,
             'sentiment': self.sentiment,
             'score': round(self.score, 3),
@@ -142,8 +160,8 @@ def _strip_tags(text: str) -> str:
 
 def _sentiment_of(title: str) -> tuple[str, float, bool]:
     t = title.lower()
-    pos = sum(t.count(w) for w in POSITIVE)
-    neg = sum(t.count(w) for w in NEGATIVE)
+    pos = sum(t.count(w) for w in set(POSITIVE))
+    neg = sum(t.count(w) for w in set(NEGATIVE))
     score = (pos - neg) / max(1, (pos + neg))
     if pos > neg:
         sent = 'positive'
@@ -173,6 +191,7 @@ def _fetch_feed(feed: dict, limit: int = 15, timeout: int = 8) -> list[NewsItem]
             out.append(
                 NewsItem(
                     source=feed['name'],
+                    source_id=feed['id'],
                     title=title,
                     url=link_el.strip(),
                     published=pub_el,
@@ -206,6 +225,11 @@ def fetch_news(per_feed: int = 15, sources: list[str] | None = None) -> list[New
         if sources and feed['id'] not in sources:
             continue
         items.extend(_fetch_feed(feed, limit=per_feed))
+    for item in items:
+        rel = SOURCE_RELIABILITY.get(item.source_id, 0.5)
+        if item.score != 0:
+            item.score *= rel
+        item.score = round(item.score, 3)
     # Best-effort sort by published date (RFC822). Fallback: keep order.
     try:
         from email.utils import parsedate_to_datetime
@@ -222,17 +246,49 @@ def fetch_news(per_feed: int = 15, sources: list[str] | None = None) -> list[New
     return items
 
 
+def get_source_reliability(source_id: str) -> float:
+    return SOURCE_RELIABILITY.get(source_id, 0.5)
+
+
 def news_summary(limit: int = 30) -> dict:
     items = fetch_news(per_feed=15)
     items = items[:limit]
     pos = sum(1 for i in items if i.sentiment == 'positive')
     neg = sum(1 for i in items if i.sentiment == 'negative')
     neu = sum(1 for i in items if i.sentiment == 'neutral')
+    weighted_pos = sum(
+        SOURCE_RELIABILITY.get(i.source_id, 0.5)
+        for i in items if i.sentiment == 'positive'
+    )
+    weighted_neg = sum(
+        SOURCE_RELIABILITY.get(i.source_id, 0.5)
+        for i in items if i.sentiment == 'negative'
+    )
+    weighted_neu = sum(
+        SOURCE_RELIABILITY.get(i.source_id, 0.5)
+        for i in items if i.sentiment == 'neutral'
+    )
     impact = [i.to_dict() for i in items if i.impact][:10]
+    reliability_by_sentiment = {}
+    for sent in ('positive', 'negative', 'neutral'):
+        items_in = [i for i in items if i.sentiment == sent]
+        if items_in:
+            reliability_by_sentiment[sent] = round(
+                sum(SOURCE_RELIABILITY.get(i.source_id, 0.5) for i in items_in) / len(items_in),
+                3,
+            )
+        else:
+            reliability_by_sentiment[sent] = 0.0
     return {
         'status': 'ok',
         'count': len(items),
         'sentiment': {'positive': pos, 'negative': neg, 'neutral': neu},
+        'sentiment_weighted': {
+            'positive': round(weighted_pos, 3),
+            'negative': round(weighted_neg, 3),
+            'neutral': round(weighted_neu, 3),
+        },
+        'reliability_by_sentiment': reliability_by_sentiment,
         'impact_headlines': impact,
         'items': [i.to_dict() for i in items],
     }

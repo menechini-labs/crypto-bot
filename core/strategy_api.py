@@ -516,6 +516,61 @@ async def api_llm_signal(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@app.post('/api/score/blended')
+async def api_score_blended(payload: dict[str, Any]) -> dict[str, Any]:
+    """Endpoint de blended confidence: SignalScore + TemplateRisk.
+
+    Body: { "closes": [float,...], "opens": [float,...],
+            "highs": [float,...], "lows": [float,...],
+            "signal": "buy"|"sell"|"hold",
+            "has_position": bool, "ctx": {...} }
+    """
+    from core.scoring import (
+        adjust_score_with_template,
+        detect_template_risk,
+        explain_score,
+        score_signal,
+    )
+
+    closes_raw = payload.get('closes', [])
+    if not isinstance(closes_raw, list) or len(closes_raw) < 20:
+        raise HTTPException(422, 'closes deve ser lista com >= 20 valores')
+
+    signal = payload.get('signal', 'hold')
+    if signal not in ('buy', 'sell', 'hold'):
+        raise HTTPException(422, 'signal deve ser buy|sell|hold')
+
+    has_position = bool(payload.get('has_position', False))
+    ctx = payload.get('ctx') or {
+        'symbol': 'BTCUSDT',
+        'regime': 'lateral',
+        'volatility': 2.5,
+        'sl_pct': 5.0,
+        'tp_pct': 10.0,
+    }
+
+    closes = [float(c) for c in closes_raw]
+    score = score_signal(closes, signal, has_position, ctx)
+
+    # Template risk detection
+    opens = [float(o) for o in payload.get('opens', closes)]
+    highs = [float(h) for h in payload.get('highs', closes)]
+    lows = [float(v) for v in payload.get('lows', closes)]
+
+    template_risk = detect_template_risk(opens, highs, lows, closes)
+    blended = adjust_score_with_template(score, template_risk)
+
+    return {
+        'status': 'ok',
+        'signal': signal,
+        'score': score.__dict__,
+        'blended': blended.__dict__,
+        'template_risk': template_risk.to_dict(),
+        'template_adjusted': True,
+        'explanation': explain_score(blended),
+    }
+
+
 @app.post('/api/backtest')
 async def api_backtest(payload: dict[str, Any]) -> dict[str, Any]:
     """Roda backtest, cacheia, retorna report + analysis."""

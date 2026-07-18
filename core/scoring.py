@@ -233,3 +233,201 @@ def explain_score(score: SignalScore) -> str:
         f'Vol: {d["volatility_pct"]}% | '
         f'RR: {d["risk_reward_ratio"]:.1f}'
     )
+
+
+# --- Template Risk Framework ---
+
+@dataclass(frozen=True)
+class TemplateRisk:
+    """Risco baseado em padrões de candle/template.
+
+    Cada atributo representa o risco (0=baixo, 1=alto) associado
+    à presença de um padrão específico.
+    """
+    doji_risk: float = 0.0
+    engulfing_risk: float = 0.0
+    hammer_risk: float = 0.0
+    shooting_star_risk: float = 0.0
+    inside_risk: float = 0.0
+    gap_risk: float = 0.0
+    high_vol_risk: float = 0.0
+    trend_exhaustion: float = 0.0
+
+    def composite_risk(self) -> float:
+        weights = {
+            'doji_risk': 1.0,
+            'engulfing_risk': 2.0,
+            'hammer_risk': 1.5,
+            'shooting_star_risk': 1.5,
+            'inside_risk': 1.0,
+            'gap_risk': 1.5,
+            'high_vol_risk': 2.0,
+            'trend_exhaustion': 1.0,
+        }
+        total_w = sum(weights.values())
+        if total_w == 0:
+            return 0.0
+        total = (
+            self.doji_risk * weights['doji_risk']
+            + self.engulfing_risk * weights['engulfing_risk']
+            + self.hammer_risk * weights['hammer_risk']
+            + self.shooting_star_risk * weights['shooting_star_risk']
+            + self.inside_risk * weights['inside_risk']
+            + self.gap_risk * weights['gap_risk']
+            + self.high_vol_risk * weights['high_vol_risk']
+            + self.trend_exhaustion * weights['trend_exhaustion']
+        )
+        return total / total_w
+
+    def to_dict(self) -> dict:
+        return {
+            'doji_risk': round(self.doji_risk, 3),
+            'engulfing_risk': round(self.engulfing_risk, 3),
+            'hammer_risk': round(self.hammer_risk, 3),
+            'shooting_star_risk': round(self.shooting_star_risk, 3),
+            'inside_risk': round(self.inside_risk, 3),
+            'gap_risk': round(self.gap_risk, 3),
+            'high_vol_risk': round(self.high_vol_risk, 3),
+            'trend_exhaustion': round(self.trend_exhaustion, 3),
+            'composite_risk': round(self.composite_risk(), 3),
+        }
+
+
+def detect_template_risk(
+    opens: list[float], highs: list[float],
+    lows: list[float], closes: list[float],
+    period: int = 5,
+) -> TemplateRisk:
+    """Analisa os últimos N candles e retorna riscos baseados em padrões."""
+    if len(closes) < period + 1:
+        return TemplateRisk()
+
+    o = opens[-period:]
+    h = highs[-period:]
+    low = lows[-period:]
+    c = closes[-period:]
+
+    doji_count = 0
+    engulfing_count = 0
+    hammer_count = 0
+    shooting_star_count = 0
+    inside_count = 0
+    gap_count = 0
+
+    for i in range(1, len(c)):
+        body = abs(c[i] - o[i])
+        range_candle = h[i] - low[i]
+
+        if range_candle == 0:
+            continue
+
+        if body / range_candle < 0.1:
+            doji_count += 1
+
+        if (
+            c[i] > o[i]
+            and o[i] <= c[i - 1]
+            and c[i] >= o[i - 1]
+        ) or (
+            o[i] > c[i]
+            and c[i] <= o[i - 1]
+            and o[i] >= c[i - 1]
+        ):
+            engulfing_count += 1
+
+        shadow_lower = min(o[i], c[i]) - low[i]
+        if body > 0 and shadow_lower / body >= 2 and h[i] - max(o[i], c[i]) < shadow_lower * 0.3:
+            hammer_count += 1
+
+        shadow_upper = h[i] - max(o[i], c[i])
+        if body > 0 and shadow_upper / body >= 2 and min(o[i], c[i]) - low[i] < shadow_upper * 0.3:
+            shooting_star_count += 1
+
+        if h[i] <= h[i - 1] and low[i] >= low[i - 1]:
+            inside_count += 1
+
+        gap = abs(o[i] - c[i - 1]) / (max(h[i - 1] - low[i - 1], 1e-9))
+        if gap > 0.5:
+            gap_count += 1
+
+    n = period - 1
+    if n == 0:
+        return TemplateRisk()
+
+    vol = calculate_volatility(closes)
+    high_vol_risk = 1.0 if vol > 8.0 else (vol / 8.0) if vol > 3.0 else 0.0
+
+    trend_exhaustion = 0.0
+    streak = 0
+    for i in range(1, len(c)):
+        if c[i] > c[i - 1]:
+            streak = streak + 1 if streak > 0 else 1
+        elif c[i] < c[i - 1]:
+            streak = streak - 1 if streak < 0 else -1
+        else:
+            streak = 0
+    abs_streak = abs(streak)
+    if abs_streak >= 5:
+        trend_exhaustion = 0.8
+    elif abs_streak >= 3:
+        trend_exhaustion = 0.4
+
+    return TemplateRisk(
+        doji_risk=doji_count / n,
+        engulfing_risk=engulfing_count / n,
+        hammer_risk=hammer_count / n,
+        shooting_star_risk=shooting_star_count / n,
+        inside_risk=inside_count / n,
+        gap_risk=gap_count / n,
+        high_vol_risk=high_vol_risk,
+        trend_exhaustion=trend_exhaustion,
+    )
+
+
+def adjust_score_with_template(score: SignalScore, template_risk: TemplateRisk) -> SignalScore:
+    """Ajusta SignalScore com base em TemplateRisk.
+
+    Reversão (engulfing, hammer) -> +confiança.
+    Indecisão (doji, inside) -> -confiança.
+    """
+    tr = template_risk
+    adj_confidence = score.confidence
+    adj_risk = score.risk_score
+    adj_details = dict(score.details)
+
+    if score.signal == 'buy':
+        if tr.engulfing_risk > 0.5:
+            adj_confidence = min(1.0, adj_confidence * 1.15)
+        if tr.hammer_risk > 0.5:
+            adj_confidence = min(1.0, adj_confidence * 1.10)
+        if tr.shooting_star_risk > 0.5:
+            adj_confidence *= 0.85
+    elif score.signal == 'sell':
+        if tr.engulfing_risk > 0.5:
+            adj_confidence = min(1.0, adj_confidence * 1.15)
+        if tr.shooting_star_risk > 0.5:
+            adj_confidence = min(1.0, adj_confidence * 1.10)
+        if tr.hammer_risk > 0.5:
+            adj_confidence *= 0.85
+
+    if tr.doji_risk > 0.5:
+        adj_confidence *= 0.9
+        adj_risk *= 0.9
+    if tr.inside_risk > 0.5:
+        adj_confidence *= 0.9
+    if tr.gap_risk > 0.5:
+        adj_confidence *= 0.85
+
+    adj_confidence = max(0.0, min(1.0, adj_confidence))
+    adj_risk = max(0.0, min(1.0, adj_risk))
+
+    adj_details['template_risk'] = tr.to_dict()
+    adj_details['template_adjusted'] = True
+
+    return SignalScore(
+        signal=score.signal,
+        confidence=round(adj_confidence, 3),
+        risk_score=round(adj_risk, 3),
+        composite=round(score.composite, 3),
+        details=adj_details,
+    )

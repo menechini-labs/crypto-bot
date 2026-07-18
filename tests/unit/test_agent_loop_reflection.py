@@ -1,7 +1,7 @@
 """Tests for Agent Desk reflection-by-cycle + PLAY controls (CAP-1..CAP-5)."""
-import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -66,8 +66,6 @@ def test_loop_start_blocked_in_demo(client):
 
 def test_loop_config_parse():
     """CAP-2/3/4/5: loop/start payload parses to correct config dict."""
-    import core.strategy_api as api
-
     # Simulate the config-build logic used by loop/start.
     p = {
         "sl_pct": "0.03",
@@ -96,12 +94,10 @@ def test_loop_config_parse():
 def test_paper_engine_closed_trades():
     """Reflection data source: engine records closed trades."""
     import core.paper_engine as pe
-    import tempfile
 
     # Isolate from the shared singleton + persisted ledger + live prices.
-    tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
-    tmp.close()
-    ledger_path = tmp.name
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+        ledger_path = tmp.name
     old_path = pe._LEDGER_PATH
     pe._LEDGER_PATH = ledger_path
     pe._ENGINE = None

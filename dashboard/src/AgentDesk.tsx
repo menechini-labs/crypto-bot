@@ -92,6 +92,14 @@ export default function AgentDesk() {
   const [cycle, setCycle] = useState<Cycle | null>(null);
   const [presets, setPresets] = useState<SwarmPreset[]>([]);
   const [preset, setPreset] = useState<string>("crypto_trading_desk");
+  const DAYTRADE_TEMPLATES = [
+    "daytrade_scalping",
+    "daytrade_breakout",
+    "daytrade_mean_reversion",
+    "daytrade_range_bound",
+    "daytrade_contrarian",
+  ];
+  const [template, setTemplate] = useState<string>("daytrade_scalping");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<string>("demo");
@@ -320,6 +328,24 @@ export default function AgentDesk() {
         </select>
         <span className="muted" style={{ fontSize: 11 }}>
           {presets.find((p) => p.name === preset)?.description ?? ""}
+        </span>
+      </div>
+
+      <div className="agent-desk__preset">
+        <label htmlFor="daytrade-template">Template Day-Trade (1m)</label>
+        <select
+          id="daytrade-template"
+          value={template}
+          onChange={(e) => { setTemplate(e.target.value); setPreset(e.target.value); load(); }}
+        >
+          {DAYTRADE_TEMPLATES.map((t) => (
+            <option key={t} value={t}>
+              {SWARM_DESC[t] ?? t}
+            </option>
+          ))}
+        </select>
+        <span className="muted" style={{ fontSize: 11 }}>
+          {presets.find((p) => p.name === template)?.description ?? "Selecione um template de day-trade para o PLAY usar estratégia 1m."}
         </span>
       </div>
 

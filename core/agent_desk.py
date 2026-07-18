@@ -383,7 +383,7 @@ def execute_cycle(closes: Optional[List[float]] = None, symbol: str = "BTCUSDT",
     from core import paper_engine as _paper
     engine = _paper.get_engine()
     snap = engine.snapshot()
-    available = snap.get("available_cash", 0.0)
+    available = snap.get("available_cash") or snap.get("cash", 0.0)
     qty = _compute_qty(symbol, conf, available)
     if qty <= 0:
         cycle["execution"] = {"executed": False, "reason": "qty calculado <= 0 (sem caixa ou preco?)"}

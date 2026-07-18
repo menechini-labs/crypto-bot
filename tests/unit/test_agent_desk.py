@@ -270,7 +270,8 @@ class TestRunCycle:
         assert "timestamp" in result
         assert len(result["agents"]) == 5  # 4 + DecisionCore
         assert result["decision"] is not None
-        assert result["decision"]["name"] == "DecisionCore"
+        # Com LLM ativo o DecisionCore vira LLMDecisionCore; ambos validos.
+        assert result["decision"]["name"] in ("DecisionCore", "LLMDecisionCore")
 
     def test_no_closes_fallback(self):
         # Should not crash when closes is None/empty
@@ -301,7 +302,8 @@ class TestRunTeam:
         names = [a["name"] for a in result["agents"]]
         assert "RiskAgent" in names
         assert "MetricsAgent" in names
-        assert "DecisionCore" in names
+        # DecisionCore (ou LLMDecisionCore quando LLM ativo) deve estar presente
+        assert any(n in names for n in ("DecisionCore", "LLMDecisionCore"))
         assert result["decision"] is not None
         # risk_committee has no StrategyAgent — DecisionCore should tolerate that
         assert "StrategyAgent" not in names
@@ -343,10 +345,16 @@ class TestExecuteCycle:
         assert cycle["execution"]["executed"] is False
         assert "DEMO" in cycle["execution"]["reason"]
 
-    def test_real_submits_order(self):
+    def test_real_submits_order(self, monkeypatch):
         from core.agent_desk import execute_cycle
         from core import paper_engine as pe
-        pe.get_engine().positions.clear()
+        import core.llm_client as llm_client
+        # Forca decisao rule-based deterministica (sem depender do LLM ao vivo).
+        # Garante caixa suficiente no engine singleton (isolado de outros testes).
+        engine = pe.get_engine()
+        engine.positions.clear()
+        engine.cash = 10000.0
+        monkeypatch.setattr(llm_client, "is_enabled", lambda: False)
         cycle = execute_cycle([100 + i for i in range(60)], mode="real")
         # buy with conf 0.76 -> should submit
         assert cycle["execution"]["executed"] is True
@@ -381,9 +389,12 @@ class TestAgentExecuteEndpoint:
         # Placeholder for API test; logic covered by integration
         assert True
 
-    def test_execute_cycle_with_team(self):
+    def test_execute_cycle_with_team(self, monkeypatch):
         from core.agent_desk import run_team
         from core.swarm_presets import get_preset
+        import core.llm_client as llm_client
+        # Isola do LLM ao vivo para decisao deterministica.
+        monkeypatch.setattr(llm_client, "is_enabled", lambda: False)
         preset = get_preset("crypto_trading_desk")
         cycle = run_team(preset, [100 + i for i in range(60)])
         assert cycle["status"] == "ok"

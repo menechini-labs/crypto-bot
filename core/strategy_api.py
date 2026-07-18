@@ -561,6 +561,13 @@ def _persist_mode(mode: str) -> None:
         pass
 
 
+@app.get("/api/swarm-presets")
+async def api_swarm_presets() -> list[dict]:
+    """Retorna lista de presets de time multi-agent (swarm)."""
+    from core.swarm_presets import list_presets
+    return list_presets()
+
+
 @app.get("/api/external")
 async def external() -> dict[str, str]:
     """URLs externas de referência (mcp-api TraderDev)."""
@@ -785,9 +792,17 @@ async def api_signals(payload: dict[str, Any]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 @app.get("/api/agents/cycle")
-async def api_agents_cycle() -> dict[str, Any]:
-    """Run a full Agent Desk cycle (Metrics/News/Risk/Strategy/DecisionCore)."""
+async def api_agents_cycle(team: str | None = None) -> dict[str, Any]:
+    """Run a full Agent Desk cycle (Metrics/News/Risk/Strategy/DecisionCore).
+
+    Se `team` for informado, filtra os agentes ao preset correspondente.
+    """
     closes = _cached_closes("BTCUSDT", "1h", 100)
+    if team:
+        from core.swarm_presets import get_preset
+        preset = get_preset(team)
+        if preset:
+            return _agent_desk.run_team(preset, closes if len(closes) >= 20 else None)
     cycle = _agent_desk.run_cycle(closes if len(closes) >= 20 else None)
     return cycle
 
@@ -843,6 +858,7 @@ async def api_positions() -> dict[str, Any]:
     exits = eng.check_exits()
     snap = eng.snapshot()
     snap["exits"] = exits
+    snap["audit"] = eng.audit_log[-50:]  # recent PreTradeAdvisory trail
     return snap
 
 
@@ -875,6 +891,8 @@ async def api_submit_order(payload: dict[str, Any]) -> dict[str, Any]:
         sl_pct=float(payload["sl_pct"]) if payload.get("sl_pct") else None,
         tp_pct=float(payload["tp_pct"]) if payload.get("tp_pct") else None,
         trailing_pct=float(payload["trailing_pct"]) if payload.get("trailing_pct") else None,
+        reason=str(payload.get("reason", ""))[:280],
+        advisory=str(payload.get("advisory", ""))[:280],
     )
     result = _paper_engine.get_engine().submit(order)
     _METRICS["orders_paper"] += 1

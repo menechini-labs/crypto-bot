@@ -75,6 +75,7 @@ class Order:
     trailing_pct: Optional[float] = None
     status: str = "filled"  # paper fills instantly at mark
     reason: str = ""
+    advisory: str = ""  # PreTradeAdvisoryInterface: rationale recorded before commit
     created_at: float = field(default_factory=time.time)
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
 
@@ -90,6 +91,7 @@ class Order:
             "trailing_pct": self.trailing_pct,
             "status": self.status,
             "reason": self.reason,
+            "advisory": self.advisory,
             "created_at": self.created_at,
         }
 
@@ -100,8 +102,14 @@ class Order:
             order_type=d.get("order_type", "market"), sl_pct=d.get("sl_pct"),
             tp_pct=d.get("tp_pct"), trailing_pct=d.get("trailing_pct"),
             status=d.get("status", "filled"), reason=d.get("reason", ""),
+            advisory=d.get("advisory", ""),
             created_at=float(d.get("created_at", time.time())), id=d.get("id", uuid.uuid4().hex[:12]),
         )
+
+# Hard safety constants (fail-closed). These mirror Vibe-Trading's signed
+# exposure caps + atomic daily order limit.
+_MAX_DAILY_ORDERS = int(os.getenv("PAPER_MAX_DAILY_ORDERS", "50"))
+_MAX_EXPOSURE_PCT = float(os.getenv("PAPER_MAX_EXPOSURE_PCT", "0.95"))  # max fraction of equity in open positions
 
 # Cache de exchangeInfo por symbol (lot size / min notional / tick).
 _EXCHANGE_INFO_CACHE: Dict[str, dict] = {}
@@ -160,6 +168,9 @@ class PaperEngine:
         self.risk = risk or RiskManager()
         self.positions: Dict[str, Position] = {}  # symbol -> position (MVP: 1 per symbol)
         self.orders: List[Order] = []
+        self.audit_log: List[dict] = []  # PreTradeAdvisoryInterface trail
+        self._day_orders: int = 0
+        self._day_key: str = time.strftime("%Y-%m-%d")
         self._seen_ids: set = set()
         self._load()
 
@@ -172,9 +183,17 @@ class PaperEngine:
             with open(_LEDGER_PATH, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
             self.cash = float(data.get("cash", self.cash))
-            self.positions = {p["symbol"]: Position.from_dict(p) for p in data.get("positions", [])}
+            self.positions = {p["symbol"]: Position.from_object(p) if isinstance(p, object) else p for p in data.get("positions", [])}
+            # tolerate both dict and dataclass forms
+            self.positions = {}
+            for p in data.get("positions", []):
+                self.positions[p["symbol"]] = Position.from_dict(p)
             self.orders = [Order.from_dict(o) for o in data.get("orders", [])]
+            self.audit_log = data.get("audit_log", [])
             self._seen_ids = {o.id for o in self.orders}
+            day = data.get("day_key")
+            if day == self._day_key:
+                self._day_orders = int(data.get("day_orders", 0))
         except Exception:
             pass  # start fresh on corruption
 
@@ -186,6 +205,9 @@ class PaperEngine:
                 "cash": self.cash,
                 "positions": [p.to_dict() for p in self.positions.values()],
                 "orders": [o.to_dict() for o in self.orders],
+                "audit_log": self.audit_log[-200:],  # cap retained trail
+                "day_orders": self._day_orders,
+                "day_key": self._day_key,
             }
             tmp = _LEDGER_PATH + ".tmp"
             with open(tmp, "w", encoding="utf-8") as fh:
@@ -195,6 +217,32 @@ class PaperEngine:
             pass  # best-effort persistence
 
     # --- order submission -------------------------------------------------
+    # --- advisory + daily limit gates ----------------------------------
+    def _roll_day(self) -> None:
+        today = time.strftime("%Y-%m-%d")
+        if today != self._day_key:
+            self._day_key = today
+            self._day_orders = 0
+
+    def _exposure_pct(self, price: float, qty: float) -> float:
+        """Total open + proposed notional as fraction of account value.
+
+        Account value = cash + sum(open position qty * mark). This avoids
+        double-counting the position notional (equity = cash + unrealized
+        PnL already excludes the position's own cost basis).
+        """
+        marks = {}
+        for sym in self.positions:
+            try:
+                marks[sym] = _market.fetch_ticker(sym)["price"]
+            except Exception:
+                marks[sym] = 0.0
+        open_notional = sum(p.qty * marks.get(p.symbol, 0.0) for p in self.positions.values())
+        account_value = self.cash + open_notional
+        if account_value <= 0:
+            return 1.0
+        return (open_notional + price * qty) / account_value
+
     def submit(self, order: Order) -> dict:
         if order.id in self._seen_ids:
             return {"ok": False, "error": "ordem duplicada (idempotency)", "order": order.to_dict()}
@@ -213,6 +261,25 @@ class PaperEngine:
         filter_err = _validate_symbol_filters(order.symbol, order.qty, price)
         if filter_err:
             return {"ok": False, "error": f"filtro exchangeInfo: {filter_err}", "order": order.to_dict()}
+
+        # Atomic daily order limit (fail-closed)
+        self._roll_day()
+        if self._day_orders >= _MAX_DAILY_ORDERS:
+            return {
+                "ok": False,
+                "error": f"limite diario de ordens atingido ({_MAX_DAILY_ORDERS}/dia)",
+                "order": order.to_dict(),
+            }
+
+        # Signed exposure cap (max fraction of equity in open positions)
+        if order.side == "buy":
+            exp_pct = self._exposure_pct(price, order.qty)
+            if exp_pct > _MAX_EXPOSURE_PCT:
+                return {
+                    "ok": False,
+                    "error": f"exposicao {exp_pct*100:.1f}% excede teto {_MAX_EXPOSURE_PCT*100:.0f}% do equity",
+                    "order": order.to_dict(),
+                }
 
         notional = price * order.qty
         max_notional = self.risk.max_notional(self.cash)
@@ -245,6 +312,20 @@ class PaperEngine:
             del self.positions[order.symbol]
 
         self.orders.append(order)
+        self._day_orders += 1
+        # PreTradeAdvisoryInterface: record rationale + risk snapshot.
+        self.audit_log.append({
+            "ts": time.time(),
+            "order_id": order.id,
+            "symbol": order.symbol,
+            "side": order.side,
+            "qty": round(order.qty, 6),
+            "price": round(price, 2),
+            "reason": order.reason,
+            "advisory": order.advisory,
+            "exposure_pct": round(self._exposure_pct(0, 0) * 100, 2),
+            "day_orders": self._day_orders,
+        })
         self._save()
         return {"ok": True, "order": order.to_dict(), "position": self.positions.get(order.symbol).to_dict(price) if order.side == "buy" else None}
 
@@ -299,6 +380,9 @@ class PaperEngine:
             "open_orders": len([o for o in self.orders if o.status == "open"]),
             "total_orders": len(self.orders),
             "paper_only": True,
+            "max_exposure_pct": _MAX_EXPOSURE_PCT,
+            "max_daily_orders": _MAX_DAILY_ORDERS,
+            "day_orders": self._day_orders,
         }
 
 

@@ -92,6 +92,7 @@ def run_backtest(
     _entry_price: float | None = None
     _entry_time: int | None = None
     _buy_price: float | None = None
+    total_traded_notional: float = 0.0  # p/ turnover
 
     # precisamos de pelo menos 2 candles para um sinal
     for t in range(1, len(closes)):
@@ -161,6 +162,7 @@ def run_backtest(
             if notional > 0:
                 executor.execute_buy(symbol, price, notional)
                 wallet.buy(symbol, price, notional)
+                total_traded_notional += notional
                 _entry_price = price
                 _entry_time = t
                 trades += 1
@@ -174,6 +176,8 @@ def run_backtest(
     final_equity = wallet.equity({symbol: closes[-1]})
     # fecha posição remanescente para apurar PnL real
     if symbol in wallet.positions:
+        pos = wallet.positions[symbol]
+        total_traded_notional += closes[-1] * pos["qty"]
         wallet.sell(symbol, closes[-1])
     final_equity = wallet.equity({})
 
@@ -181,7 +185,11 @@ def run_backtest(
     pnl_pct = pnl / initial if initial > 0 else 0.0
     win_rate = (wins / trades) if trades > 0 else 0.0
 
-    metrics = compute_metrics(equity_curve, periods_per_year=365 * 24, wins=wins, trades=trades)
+    metrics = compute_metrics(
+        equity_curve, periods_per_year=365 * 24, wins=wins, trades=trades, bootstrap=True
+    )
+    avg_equity = sum(equity_curve) / len(equity_curve) if equity_curve else initial
+    turnover = (total_traded_notional / avg_equity) if avg_equity > 0 else 0.0
 
     return {
         "symbol": symbol,
@@ -196,6 +204,8 @@ def run_backtest(
         "pnl_pct": round(pnl_pct, 6),
         "max_drawdown_pct": round(max_dd, 6),
         "sharpe": round(metrics["sharpe"], 4),
+        "sharpe_ci": [round(x, 4) for x in metrics.get("sharpe_ci", [0.0, 0.0])],
+        "turnover": round(turnover, 4),
         "cagr": round(metrics["cagr"], 6),
         "equity_curve": [round(e, 2) for e in equity_curve[1:]],
         "trades_list": trade_log,

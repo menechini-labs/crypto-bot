@@ -53,16 +53,43 @@ function AgentCard({ a }: { a: AgentRecord }) {
   );
 }
 
+interface SwarmPreset {
+  name: string;
+  description: string;
+  strategy_focus: string;
+  agents: string[];
+}
+
+const SWARM_DESC: Record<string, string> = {
+  crypto_trading_desk: "Time cripto completo",
+  investment_committee: "Comitê de investimento (lateral/baixa vol)",
+  quant_desk: "Desk quant (tendência, sem news/risk)",
+  risk_committee: "Comitê de risco (baixa, reduz exposição)",
+  scalping_desk: "Scalping 1h (notícias em tempo real)",
+  hedge_desk: "Hedge/monitoramento (só análise)",
+};
+
 export default function AgentDesk() {
   const [cycle, setCycle] = useState<Cycle | null>(null);
+  const [presets, setPresets] = useState<SwarmPreset[]>([]);
+  const [preset, setPreset] = useState<string>("crypto_trading_desk");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  async function loadPresets() {
+    try {
+      const res = await fetch("/api/swarm-presets");
+      if (res.ok) setPresets((await res.json()) as SwarmPreset[]);
+    } catch {
+      /* silencioso */
+    }
+  }
 
   async function load() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/agents/cycle");
+      const res = await fetch(`/api/agents/cycle?team=${encodeURIComponent(preset)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setCycle((await res.json()) as Cycle);
     } catch (e) {
@@ -73,6 +100,7 @@ export default function AgentDesk() {
   }
 
   useEffect(() => {
+    loadPresets();
     load();
     const id = setInterval(load, 30_000);
     return () => clearInterval(id);
@@ -102,6 +130,24 @@ export default function AgentDesk() {
         <button type="button" className="sig__real" onClick={load} disabled={loading}>
           ⟳ Rodar ciclo
         </button>
+      </div>
+
+      <div className="agent-desk__preset">
+        <label htmlFor="preset">Preset do time (swarm)</label>
+        <select
+          id="preset"
+          value={preset}
+          onChange={(e) => { setPreset(e.target.value); load(); }}
+        >
+          {presets.map((p) => (
+            <option key={p.name} value={p.name}>
+              {SWARM_DESC[p.name] ?? p.name}
+            </option>
+          ))}
+        </select>
+        <span className="muted" style={{ fontSize: 11 }}>
+          {presets.find((p) => p.name === preset)?.description ?? ""}
+        </span>
       </div>
 
       <div className="agent-desk__grid">

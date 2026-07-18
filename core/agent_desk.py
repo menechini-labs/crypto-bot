@@ -128,29 +128,40 @@ def _strategy_agent(closes: List[float]) -> AgentVerdict:
 
 def _decision_core(agents: List[AgentVerdict], closes: List[float]) -> AgentVerdict:
     # Weighted fusion: metrics + strategy push direction; news + risk gate.
-    metrics = next(a for a in agents if a.name == "MetricsAgent")
-    news = next(a for a in agents if a.name == "NewsAgent")
-    risk = next(a for a in agents if a.name == "RiskAgent")
-    strat = next(a for a in agents if a.name == "StrategyAgent")
+    # Missing agents are skipped (handles team presets).
+    def _find(name: str) -> AgentVerdict | None:
+        return next((a for a in agents if a.name == name), None)
+
+    metrics = _find("MetricsAgent")
+    news = _find("NewsAgent")
+    risk = _find("RiskAgent")
+    strat = _find("StrategyAgent")
 
     # Base signal from regime + strategy fit.
-    regime = metrics.metrics.get("regime", "unknown")
+    if metrics:
+        regime = metrics.metrics.get("regime", "unknown") if hasattr(metrics, "metrics") else "unknown"
+    else:
+        regime = "unknown"
+
     if regime == "uptrend":
         base = 0.7
     elif regime == "downtrend":
         base = 0.3
     else:
         base = 0.5
-    base = base * 0.7 + strat.confidence * 0.3
+
+    if strat:
+        base = base * 0.7 + strat.confidence * 0.3
 
     # News tilt.
-    if news.verdict == "ok":
-        base += 0.1
-    elif news.verdict == "warn":
-        base -= 0.15
+    if news:
+        if news.verdict == "ok":
+            base += 0.1
+        elif news.verdict == "warn":
+            base -= 0.15
 
     # Risk gate: hard block if risk warns AND drawdown budget loose.
-    if risk.verdict == "warn":
+    if risk and risk.verdict == "warn":
         base *= 0.8
 
     base = max(0.0, min(1.0, base))
@@ -161,12 +172,55 @@ def _decision_core(agents: List[AgentVerdict], closes: List[float]) -> AgentVerd
     else:
         verdict = "hold"
     conf = round(base, 3)
-    reason = (f"Fusao: regime={regime} ({metrics.confidence:.2f}), "
-              f"estrategia={strat.metrics.get('top')} ({strat.confidence:.2f}), "
-              f"news={news.verdict} ({news.confidence:.2f}), risk={risk.verdict}. "
-              f"-> {verdict.upper()} @ {conf:.2f}")
+    parts = [f"regime={regime}"]
+    if metrics:
+        parts.append(f"metrics={metrics.confidence:.2f}")
+    if strat:
+        parts.append(f"strat={strat.metrics.get('top', '?')} ({strat.confidence:.2f})")
+    if news:
+        parts.append(f"news={news.verdict} ({news.confidence:.2f})")
+    if risk:
+        parts.append(f"risk={risk.verdict}")
+    parts.append(f"-> {verdict.upper()} @ {conf:.2f}")
+    reason = " | ".join(parts)
     return AgentVerdict("DecisionCore", "fusion", verdict, conf, reason,
                         {"regime": regime, "fused_score": conf})
+
+
+def run_team(preset: dict, closes: Optional[List[float]] = None) -> dict:
+    """Run a cycle using only the agents named in `preset['agents']`.
+
+    preset: dict retornado por core.swarm_presets.get_preset()
+    """
+    if not closes:
+        try:
+            closes = scoring._cached_closes if hasattr(scoring, "_cached_closes") else []
+        except Exception:
+            closes = []
+    t0 = time.time()
+    allowed = set(preset.get("agents", []))
+    # mapa nome -> factory
+    registry = {
+        "MetricsAgent": lambda: _metrics_agent(closes),
+        "NewsAgent": lambda: _news_agent(),
+        "RiskAgent": lambda: _risk_agent(),
+        "StrategyAgent": lambda: _strategy_agent(closes),
+    }
+    all_agents = [registry[n]() for n in allowed if n in registry]
+    if "DecisionCore" in allowed:
+        core = _decision_core(all_agents, closes)
+        all_agents.append(core)
+    else:
+        core = None
+    return {
+        "status": "ok",
+        "team": preset.get("name"),
+        "cycle_id": int(t0 * 1000),
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "paper_only": True,
+        "agents": [a.to_dict() for a in all_agents],
+        "decision": core.to_dict() if core else None,
+    }
 
 
 def run_cycle(closes: Optional[List[float]] = None) -> dict:

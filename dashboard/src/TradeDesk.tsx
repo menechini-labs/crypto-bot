@@ -13,6 +13,15 @@ interface Position {
   unrealized_pnl_pct: number;
 }
 
+interface AuditEntry {
+  ts: number;
+  side: string;
+  symbol: string;
+  price: number;
+  qty: number;
+  advisory: string;
+}
+
 interface Snapshot {
   cash: number;
   equity: number;
@@ -22,6 +31,10 @@ interface Snapshot {
   paper_only: boolean;
   exits: Array<{ symbol: string; reason: string }>;
   demo?: boolean;
+  day_orders?: number;
+  max_daily_orders?: number;
+  max_exposure_pct?: number;
+  audit?: AuditEntry[];
 }
 
 export default function TradeDesk({ mode }: { mode: "demo" | "real" }) {
@@ -31,6 +44,8 @@ export default function TradeDesk({ mode }: { mode: "demo" | "real" }) {
   const [sl, setSl] = useState("");
   const [tp, setTp] = useState("");
   const [trail, setTrail] = useState("");
+  const [reason, setReason] = useState("");
+  const [advisory, setAdvisory] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const demo = mode === "demo";
@@ -66,6 +81,8 @@ export default function TradeDesk({ mode }: { mode: "demo" | "real" }) {
           sl_pct: sl ? Number(sl) : null,
           tp_pct: tp ? Number(tp) : null,
           trailing_pct: trail ? Number(trail) : null,
+          reason: reason || `manual ${side} via TradeDesk`,
+          advisory: advisory || "consent-first REAL commit (sidebar confirm)",
         }),
       });
       const j = await res.json();
@@ -109,6 +126,8 @@ export default function TradeDesk({ mode }: { mode: "demo" | "real" }) {
           <label><span>SL %</span><input value={sl} placeholder="ex: 0.05" onChange={(e) => setSl(e.target.value)} /></label>
           <label><span>TP %</span><input value={tp} placeholder="ex: 0.10" onChange={(e) => setTp(e.target.value)} /></label>
           <label><span>Trailing %</span><input value={trail} placeholder="ex: 0.03" onChange={(e) => setTrail(e.target.value)} /></label>
+          <label style={{ gridColumn: "1 / -1" }}><span>Motivo (audit)</span><input value={reason} placeholder="ex: cruzamento MA + RSI" onChange={(e) => setReason(e.target.value)} /></label>
+          <label style={{ gridColumn: "1 / -1" }}><span>Advisory (Pré-Trade)</span><input value={advisory} placeholder="ex: risk ok, exposição sob teto" onChange={(e) => setAdvisory(e.target.value)} /></label>
           <div className="trade-desk__actions">
             {demo ? (
               <p className="td-msg td-msg--warn">DEMO mode · execução desligada. Ative REAL no menu lateral.</p>
@@ -123,6 +142,26 @@ export default function TradeDesk({ mode }: { mode: "demo" | "real" }) {
 
         {msg && <p className="td-msg td-msg--ok">{msg}</p>}
         {error && <p className="td-msg td-msg--err">Erro: {error}</p>}
+      </div>
+
+      <div className="trade-desk__audit">
+        <h3>Auditoria Pré-Trade <span className="muted">(fail-closed trail)</span></h3>
+        {snap?.max_daily_orders != null && (
+          <div className="td-meter">
+            <small>Ordens hoje: {snap.day_orders ?? 0}/{snap.max_daily_orders} · Exposição máx: {((snap.max_exposure_pct ?? 0.95) * 100).toFixed(0)}%</small>
+            <div className="td-meter__bar"><span style={{ width: `${Math.min(100, ((snap.day_orders ?? 0) / (snap.max_daily_orders || 1)) * 100)}%` }} /></div>
+          </div>
+        )}
+        {!snap?.audit?.length && <p className="muted">Nenhuma ordem REAL registrada.</p>}
+        <ul className="td-audit">
+          {snap?.audit?.slice().reverse().map((a, i) => (
+            <li key={i}>
+              <span className="td-audit__ts">{new Date(a.ts * 1000).toLocaleTimeString()}</span>
+              <b>{a.side.toUpperCase()}</b> {a.symbol} @ {a.price} · {a.qty}
+              <br /><span className="muted">adv: {a.advisory || "—"}</span>
+            </li>
+          ))}
+        </ul>
       </div>
 
       <div className="trade-desk__positions">

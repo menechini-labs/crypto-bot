@@ -15,8 +15,30 @@ Sharpe (simplificado, sem rf):
 CAGR:
   (equity_final / equity_inicial)^(1/years) - 1
   years = len/periods_per_year
+
+Turnover (retornado separadamente, não calculado aqui — passado do backtest).
+Bootstrap CI 95% para Sharpe (1 000 reamostragens, stdlib random).
 """
 import math
+import random
+
+def _bootstrap_sharpe_ci(rets: list[float], periods_per_year: int, n_iter: int = 1000) -> tuple[float, float]:
+    """Retorna (lower, upper) 95% CI para Sharpe via bootstrap."""
+    if not rets:
+        return (0.0, 0.0)
+    boot_sharpes: list[float] = []
+    n = len(rets)
+    for _ in range(n_iter):
+        sample = [rets[random.randrange(n)] for _ in range(n)]
+        # use sample in place
+        m = sum(sample) / n
+        var = sum((r - m) ** 2 for r in sample) / n
+        std = math.sqrt(var) if var > 0 else 1e-12
+        boot_sharpes.append((m / std) * math.sqrt(periods_per_year))
+    boot_sharpes.sort()
+    lo = boot_sharpes[int(n_iter * 0.025)]
+    hi = boot_sharpes[int(n_iter * 0.975)]
+    return (lo, hi)
 
 
 def _returns(equity: list[float]) -> list[float]:
@@ -33,11 +55,13 @@ def compute_metrics(
     periods_per_year: int = 365 * 24,
     wins: int = 0,
     trades: int = 0,
+    bootstrap: bool = False,
 ) -> dict:
-    logger.info("compute_metrics equity_len=%d trades=%d", len(equity), trades)
+    logger.info("compute_metrics equity_len=%d trades=%d bootstrap=%s", len(equity), trades, bootstrap)
     """Calcula métricas de qualidade da curva de equity.
 
     Retorna: sharpe, cagr, max_drawdown, win_rate.
+    Se bootstrap=True, adiciona sharpe_ci=(lower, upper) 95%.
     """
     if len(equity) < 2:
         raise ValueError("equity precisa de pelo menos 2 pontos")
@@ -77,9 +101,12 @@ def compute_metrics(
 
     win_rate = (wins / trades) if trades > 0 else 0.0
 
-    return {
+    out = {
         "sharpe": sharpe,
         "cagr": cagr,
         "max_drawdown": max_dd,
         "win_rate": win_rate,
     }
+    if bootstrap:
+        out["sharpe_ci"] = list(_bootstrap_sharpe_ci(rets, periods_per_year))
+    return out

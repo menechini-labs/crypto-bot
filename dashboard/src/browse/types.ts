@@ -66,6 +66,8 @@ export interface BacktestReport {
   max_drawdown_pct: number;
   win_rate: number;
   sharpe: number;
+  sharpe_ci?: [number, number];
+  turnover?: number;
   cagr: number;
   trades: number;
   profit_factor?: number;

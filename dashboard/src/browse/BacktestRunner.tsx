@@ -163,9 +163,19 @@ export default function BacktestRunner({ onRun }: Props) {
               <small>Sharpe</small>
               <span>{result.sharpe.toFixed(2)}</span>
             </div>
+            {result.sharpe_ci && (
+              <div className="kpi" style={{ gridColumn: "span 2" }}>
+                <small>Sharpe 95% CI</small>
+                <span className="muted">[{result.sharpe_ci[0]?.toFixed(2) ?? 'N/A'}, {result.sharpe_ci[1]?.toFixed(2) ?? 'N/A'}]</span>
+              </div>
+            )}
             <div className="kpi">
               <small>Win Rate</small>
               <span>{result.win_rate.toFixed(0)}%</span>
+            </div>
+            <div className="kpi">
+              <small>Turnover</small>
+              <span>{((result.turnover ?? 0) * 100).toFixed(1)}%</span>
             </div>
             <div className="kpi">
               <small>Trades</small>

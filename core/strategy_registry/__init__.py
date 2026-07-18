@@ -7,5 +7,6 @@ from .registry import register, get, get_all
 from . import grid_strategy
 from . import dynamic_grid_strategy
 from . import llm_strategy
+from . import indicator_strategies
 
 __all__ = ["BaseStrategy", "register", "get", "get_all"]

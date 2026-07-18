@@ -29,7 +29,14 @@ def _strategy_signal(strategy_name: str, closes: list[float], grid_levels=None, 
     if strategy_name == "grid":
         from core.strategy import decide_grid
         return decide_grid(closes, grid_levels, has_position)
-    # estratégia real do bot
+    # tentar registry primeiro
+    try:
+        from core.strategy_registry.registry import get as _reg_get
+        st = _reg_get(strategy_name)
+        return st().decide(closes, has_position)
+    except KeyError:
+        pass
+    # estratégia real do bot (fallback)
     from core.strategy import decide
     return decide(closes)
 

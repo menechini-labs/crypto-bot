@@ -178,7 +178,8 @@ def _build_strategies_from_registry() -> list[dict[str, Any]]:
         })
     return out
 
-_VALID_STRATEGIES = frozenset({"grid", "grid_dynamic", "combined", "baseline", "default", "llm"})
+_VALID_STRATEGIES = frozenset({"grid", "grid_dynamic", "combined", "baseline", "default", "llm",
+                            "ma_cross", "rsi_oversold", "bollinger_reversal", "trend_follow", "macd_signal"})
 _VALID_REGIMES = frozenset({"lateral", "uptrend", "downtrend"})
 
 # ---------------------------------------------------------------------------

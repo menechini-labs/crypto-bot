@@ -82,6 +82,17 @@ export default function AgentDesk() {
   const [execMsg, setExecMsg] = useState<string | null>(null);
   const [loopRunning, setLoopRunning] = useState(false);
   const [loopBusy, setLoopBusy] = useState(false);
+  const [cfg, setCfg] = useState({
+    sl_pct: "2",
+    tp_pct: "5",
+    trailing_pct: "1",
+    target_price: "",
+    auto_trade: true,
+    lock_stop: false,
+  });
+  const [reflOpen, setReflOpen] = useState(false);
+  const [reflections, setReflections] = useState<any[]>([]);
+  const [reflBusy, setReflBusy] = useState(false);
 
   async function loadLoopStatus() {
     try {
@@ -89,6 +100,17 @@ export default function AgentDesk() {
       if (res.ok) {
         const s = await res.json();
         setLoopRunning(Boolean(s.running));
+        if (s.config) {
+          setCfg((c) => ({
+            ...c,
+            sl_pct: String(s.config.sl_pct != null ? s.config.sl_pct * 100 : c.sl_pct),
+            tp_pct: String(s.config.tp_pct != null ? s.config.tp_pct * 100 : c.tp_pct),
+            trailing_pct: String(s.config.trailing_pct != null ? s.config.trailing_pct * 100 : c.trailing_pct),
+            target_price: s.config.target_price ? String(s.config.target_price) : c.target_price,
+            auto_trade: s.config.auto_trade !== false,
+            lock_stop: Boolean(s.config.lock_stop),
+          }));
+        }
       }
     } catch {
       /* silencioso */
@@ -99,10 +121,23 @@ export default function AgentDesk() {
     setLoopBusy(true);
     try {
       const url = loopRunning ? "/api/agents/loop/stop" : "/api/agents/loop/start";
+      const body = loopRunning
+        ? {}
+        : {
+            team: preset,
+            symbol: "BTCUSDT",
+            interval: 20,
+            sl_pct: parseFloat(cfg.sl_pct) / 100,
+            tp_pct: parseFloat(cfg.tp_pct) / 100,
+            trailing_pct: parseFloat(cfg.trailing_pct) / 100,
+            target_price: cfg.target_price ? parseFloat(cfg.target_price) : null,
+            auto_trade: cfg.auto_trade,
+            lock_stop: cfg.lock_stop,
+          };
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ team: preset, symbol: "BTCUSDT", interval: 20 }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (res.ok) {
@@ -115,6 +150,40 @@ export default function AgentDesk() {
       setExecMsg(e instanceof Error ? e.message : "erro ao controlar loop");
     } finally {
       setLoopBusy(false);
+    }
+  }
+
+  async function loadReflections() {
+    try {
+      const res = await fetch("/api/agents/reflections");
+      if (res.ok) {
+        const s = await res.json();
+        setReflections(s.reflections ?? []);
+      }
+    } catch {
+      /* silencioso */
+    }
+  }
+
+  async function reflectCycle() {
+    if (!cycle) return;
+    setReflBusy(true);
+    try {
+      const res = await fetch(`/api/agents/cycle/${cycle.cycle_id}/reflection`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setReflOpen(true);
+        await loadReflections();
+      } else {
+        setExecMsg(`✗ ${data.error ?? "falha ao refletir"}`);
+      }
+    } catch (e) {
+      setExecMsg(e instanceof Error ? e.message : "erro ao refletir");
+    } finally {
+      setReflBusy(false);
     }
   }
 
@@ -183,6 +252,7 @@ export default function AgentDesk() {
     loadMode();
     load();
     loadLoopStatus();
+    loadReflections();
     const id = setInterval(load, 30_000);
     const id2 = setInterval(loadLoopStatus, 10_000);
     return () => { clearInterval(id); clearInterval(id2); };
@@ -224,6 +294,15 @@ export default function AgentDesk() {
         >
           {loopRunning ? "■ STOP" : "▶ PLAY"}
         </button>
+        <button
+          type="button"
+          className="btn btn--reflect"
+          onClick={reflectCycle}
+          disabled={reflBusy || !cycle}
+          title="Gerar reflexão dos trades do agente neste ciclo"
+        >
+          {reflBusy ? "Refletindo…" : "🪞 Reflect"}
+        </button>
       </div>
 
       <div className="agent-desk__preset">
@@ -241,6 +320,22 @@ export default function AgentDesk() {
         </select>
         <span className="muted" style={{ fontSize: 11 }}>
           {presets.find((p) => p.name === preset)?.description ?? ""}
+        </span>
+      </div>
+
+      <div className="agent-desk__playcfg">
+        <span className="agent-desk__playcfg-title">Controles do PLAY</span>
+        <div className="agent-desk__playcfg-grid">
+          <label><span>SL %</span><input value={cfg.sl_pct} disabled={loopRunning} onChange={(e) => setCfg({ ...cfg, sl_pct: e.target.value })} /></label>
+          <label><span>TP %</span><input value={cfg.tp_pct} disabled={loopRunning} onChange={(e) => setCfg({ ...cfg, tp_pct: e.target.value })} /></label>
+          <label><span>Trailing %</span><input value={cfg.trailing_pct} disabled={loopRunning} onChange={(e) => setCfg({ ...cfg, trailing_pct: e.target.value })} /></label>
+          <label><span>Meta ($)</span><input value={cfg.target_price} disabled={loopRunning} placeholder="ex: 64000" onChange={(e) => setCfg({ ...cfg, target_price: e.target.value })} /></label>
+          <label className="agent-desk__toggle"><input type="checkbox" checked={cfg.auto_trade} disabled={loopRunning} onChange={(e) => setCfg({ ...cfg, auto_trade: e.target.checked })} /><span>Auto buy/sell</span></label>
+          <label className="agent-desk__toggle"><input type="checkbox" checked={cfg.lock_stop} disabled={loopRunning} onChange={(e) => setCfg({ ...cfg, lock_stop: e.target.checked })} /><span>Lock Stop</span></label>
+        </div>
+        <span className="muted" style={{ fontSize: 11 }}>
+          {cfg.auto_trade ? "Auto: executa ordens quando conf≥0.5." : "Análise only: PLAY não executa — use Executar ordem."}
+          {cfg.lock_stop ? " Lock Stop: sem SL; só sai na Meta." : ""}
         </span>
       </div>
 
@@ -274,6 +369,37 @@ export default function AgentDesk() {
         </div>
       ) : (
         <p className="muted">Time sem agentes (apenas análise).</p>
+      )}
+
+      {reflOpen && (
+        <div className="agent-desk__reflections">
+          <div className="agent-desk__reflections-head">
+            <h3>Reflection Agents</h3>
+            <button type="button" className="btn btn--small" onClick={() => setReflOpen(false)}>Fechar</button>
+          </div>
+          {reflections.length === 0 ? (
+            <p className="muted">Sem reflexões ainda. Rode o PLAY para gerar trades.</p>
+          ) : (
+            reflections.slice().reverse().map((r, i) => (
+              <div key={i} className="reflection-card">
+                <div className="reflection-card__meta">
+                  ciclo #{r.cycle_id} · {r.total_trades} trades · {r.timestamp?.slice(0, 19)}
+                </div>
+                <ul className="reflection-card__insights">
+                  {(r.insights ?? []).map((ins: string, j: number) => (
+                    <li key={j}>{ins}</li>
+                  ))}
+                </ul>
+                {r.recommendations?.length > 0 && (
+                  <div className="reflection-card__recs">
+                    <strong>Recomendações:</strong>
+                    <ul>{(r.recommendations ?? []).map((rec: string, k: number) => (<li key={k}>{rec}</li>))}</ul>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
       )}
     </div>
   );

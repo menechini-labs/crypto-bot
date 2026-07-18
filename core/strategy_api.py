@@ -495,6 +495,36 @@ async def get_reflections(limit: int = Query(10, ge=1, le=50)) -> dict[str, Any]
     return {"status": "ok", "reflections": _load_reflections(limit=limit)}
 
 
+@app.get("/api/agents/reflections")
+async def get_agent_reflections(limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
+    """Historico de reflexoes geradas por ciclo de agente."""
+    all_refs = _load_reflections(limit=limit * 4)
+    agent_refs = [r for r in all_refs if r.get("source") == "agent_cycle"][-limit:]
+    return {"status": "ok", "reflections": agent_refs}
+
+
+@app.post("/api/agents/cycle/{cycle_id}/reflection")
+async def agent_cycle_reflection(cycle_id: int) -> dict[str, Any]:
+    """Gera reflexao dos trades do agente ate este ciclo."""
+    from core import paper_engine as _pe
+    engine = _pe.get_engine()
+    since_ts = cycle_id / 1000.0  # cycle_id e epoch ms
+    trades = engine.get_closed_trades(since_ts=since_ts)
+    if not trades:
+        trades = engine.get_closed_trades()  # fallback: todos os trades fechados
+    reflection = reflect_trades(
+        trades,
+        regime="agent_desk",
+        strategy="agent_desk",
+        symbol="BTCUSDT",
+    )
+    reflection["source"] = "agent_cycle"
+    reflection["cycle_id"] = cycle_id
+    reflection["total_trades"] = len(trades)
+    save_reflection(reflection)
+    return {"status": "ok", "reflection": reflection}
+
+
 # ---------------------------------------------------------------------------
 # Phase 0/1: observability, market data, indicators, indices, signals
 # ---------------------------------------------------------------------------
@@ -897,6 +927,15 @@ _AGENT_LOOP_THREAD: threading.Thread | None = None
 _AGENT_LOOP_STOP = threading.Event()
 _AGENT_LOOP_INTERVAL = 20
 _AGENT_LOOP_TEAM = "balanced"
+# Configuraveis do PLAY (vem do frontend). Defaults preservam comportamento antigo.
+_AGENT_LOOP_CFG: dict[str, Any] = {
+    "sl_pct": 0.02,
+    "tp_pct": 0.05,
+    "trailing_pct": 0.01,
+    "target_price": None,   # meta em preco absoluto (CAP-5)
+    "auto_trade": True,     # False -> so analisa e avisa (CAP-3)
+    "lock_stop": False,     # True -> nao sai por SL; so por meta (CAP-4)
+}
 
 
 def _agent_loop_worker() -> None:
@@ -908,6 +947,7 @@ def _agent_loop_worker() -> None:
         while not _AGENT_LOOP_STOP.is_set():
             try:
                 symbol = _AGENT_LOOP_TEAM_SYMBOL if _AGENT_LOOP_TEAM_SYMBOL else "BTCUSDT"
+                cfg = _AGENT_LOOP_CFG
                 candles = fetch_ohlcv(symbol, "1h", 100)
                 closes = [c["close"] for c in candles]
                 cycle = _ad.run_cycle(closes if len(closes) >= 20 else None)
@@ -915,18 +955,30 @@ def _agent_loop_worker() -> None:
                 verdict, conf = decision["verdict"], decision["confidence"]
                 if verdict in ("buy", "sell") and conf >= 0.5:
                     engine = _pe.get_engine()
-                    snap = engine.snapshot()
-                    avail = snap.get("available_cash", snap.get("cash", 0.0))
-                    qty = _ad._compute_qty(symbol, conf, avail)
-                    if qty > 0:
-                        order = _pe.Order(
-                            symbol=symbol, side=verdict, qty=qty,
-                            sl_pct=0.02, tp_pct=0.05, trailing_pct=0.01,
-                            reason=f"AgentDesk {verdict} (conf {conf:.2f})",
-                            advisory=decision.get("reasoning", ""),
-                        )
-                        res = engine.submit(order)
-                        logging.info("agent_loop %s %s -> ok=%s", verdict, qty, res.get("ok"))
+                    if not cfg.get("auto_trade", True):
+                        logging.info("agent_loop analise-only (%s conf %.2f) -- auto_trade off", verdict, conf)
+                    else:
+                        snap = engine.snapshot()
+                        avail = snap.get("available_cash", snap.get("cash", 0.0))
+                        qty = _ad._compute_qty(symbol, conf, avail)
+                        if qty > 0:
+                            # Meta (target_price) vira tp_pct absoluto (CAP-5)
+                            tp_pct = cfg["tp_pct"]
+                            target_price = cfg.get("target_price")
+                            if target_price:
+                                last = closes[-1] if closes else 0.0
+                                if last > 0:
+                                    tp_pct = (float(target_price) / last - 1.0)
+                            # Lock stop: sem SL duro, so sai por meta (CAP-4)
+                            sl_pct = 0.0 if cfg.get("lock_stop") else cfg["sl_pct"]
+                            order = _pe.Order(
+                                symbol=symbol, side=verdict, qty=qty,
+                                sl_pct=sl_pct, tp_pct=tp_pct, trailing_pct=cfg["trailing_pct"],
+                                reason=f"AgentDesk {verdict} (conf {conf:.2f})",
+                                advisory=decision.get("reasoning", ""),
+                            )
+                            res = engine.submit(order)
+                            logging.info("agent_loop %s %s -> ok=%s", verdict, qty, res.get("ok"))
             except Exception as e:
                 logging.warning("agent_loop error: %s", e)
             _AGENT_LOOP_STOP.wait(_AGENT_LOOP_INTERVAL)
@@ -940,7 +992,7 @@ _AGENT_LOOP_TEAM_SYMBOL = "BTCUSDT"
 @app.post("/api/agents/loop/start")
 async def api_agents_loop_start(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     """PLAY: start continuous agent desk loop (REAL mode only)."""
-    global _AGENT_LOOP_THREAD, _AGENT_LOOP_TEAM, _AGENT_LOOP_TEAM_SYMBOL
+    global _AGENT_LOOP_THREAD, _AGENT_LOOP_TEAM, _AGENT_LOOP_TEAM_SYMBOL, _AGENT_LOOP_CFG
     if _MODE != "real" or not _ALLOW_LIVE:
         raise HTTPException(status_code=403, detail="loop requer modo REAL + ALLOW_LIVE_TRADING=1")
     if _AGENT_LOOP_THREAD and _AGENT_LOOP_THREAD.is_alive():
@@ -948,14 +1000,24 @@ async def api_agents_loop_start(payload: dict[str, Any] | None = None) -> dict[s
     _AGENT_LOOP_STOP.clear()
     _AGENT_LOOP_TEAM = (payload or {}).get("team", "balanced")
     _AGENT_LOOP_TEAM_SYMBOL = (payload or {}).get("symbol", "BTCUSDT")
-    if (payload or {}).get("interval"):
+    # Aplica controles do PLAY (CAP-2/3/4/5)
+    p = payload or {}
+    if "interval" in p and p["interval"]:
         try:
-            _AGENT_LOOP_INTERVAL = max(5, int((payload or {}).get("interval")))
+            _AGENT_LOOP_INTERVAL = max(5, int(p["interval"]))
         except (TypeError, ValueError):
             pass
+    _AGENT_LOOP_CFG = {
+        "sl_pct": float(p.get("sl_pct", 0.02)),
+        "tp_pct": float(p.get("tp_pct", 0.05)),
+        "trailing_pct": float(p.get("trailing_pct", 0.01)),
+        "target_price": float(p["target_price"]) if p.get("target_price") not in (None, "", 0) else None,
+        "auto_trade": bool(p.get("auto_trade", True)),
+        "lock_stop": bool(p.get("lock_stop", False)),
+    }
     _AGENT_LOOP_THREAD = threading.Thread(target=_agent_loop_worker, daemon=True)
     _AGENT_LOOP_THREAD.start()
-    return {"status": "started", "running": True, "team": _AGENT_LOOP_TEAM, "symbol": _AGENT_LOOP_TEAM_SYMBOL}
+    return {"status": "started", "running": True, "team": _AGENT_LOOP_TEAM, "symbol": _AGENT_LOOP_TEAM_SYMBOL, "config": _AGENT_LOOP_CFG}
 
 
 @app.post("/api/agents/loop/stop")
@@ -980,6 +1042,7 @@ async def api_agents_loop_status() -> dict[str, Any]:
         "symbol": _AGENT_LOOP_TEAM_SYMBOL,
         "interval": _AGENT_LOOP_INTERVAL,
         "mode": _MODE,
+        "config": _AGENT_LOOP_CFG,
     }
 
 

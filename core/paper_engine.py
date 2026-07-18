@@ -169,6 +169,7 @@ class PaperEngine:
         self.positions: Dict[str, Position] = {}  # symbol -> position (MVP: 1 per symbol)
         self.orders: List[Order] = []
         self.audit_log: List[dict] = []  # PreTradeAdvisoryInterface trail
+        self.closed_trades: List[dict] = []  # closed trade history for reflection
         self._day_orders: int = 0
         self._day_key: str = time.strftime("%Y-%m-%d")
         self._seen_ids: set = set()
@@ -190,6 +191,7 @@ class PaperEngine:
                 self.positions[p["symbol"]] = Position.from_dict(p)
             self.orders = [Order.from_dict(o) for o in data.get("orders", [])]
             self.audit_log = data.get("audit_log", [])
+            self.closed_trades = data.get("closed_trades", [])
             self._seen_ids = {o.id for o in self.orders}
             day = data.get("day_key")
             if day == self._day_key:
@@ -206,6 +208,7 @@ class PaperEngine:
                 "positions": [p.to_dict() for p in self.positions.values()],
                 "orders": [o.to_dict() for o in self.orders],
                 "audit_log": self.audit_log[-200:],  # cap retained trail
+                "closed_trades": self.closed_trades[-200:],  # cap retained history
                 "day_orders": self._day_orders,
                 "day_key": self._day_key,
             }
@@ -308,6 +311,21 @@ class PaperEngine:
             pos = self.positions.get(order.symbol)
             if not pos:
                 return {"ok": False, "error": "sem posicao para fechar", "order": order.to_dict()}
+            exit_price = price
+            entry = pos.entry_price
+            pnl = (exit_price - entry) * pos.qty
+            pnl_pct = (exit_price - entry) / entry if entry else 0.0
+            self.closed_trades.append({
+                "symbol": order.symbol,
+                "side": "buy",  # entry side
+                "entry_price": round(entry, 2),
+                "exit_price": round(exit_price, 2),
+                "pnl": round(pnl, 2),
+                "pnl_pct": round(pnl_pct, 4),
+                "duration_min": 0.0,
+                "reason": order.reason or "manual",
+                "exit_ts": time.time(),
+            })
             self.cash += price * pos.qty
             del self.positions[order.symbol]
 
@@ -362,6 +380,12 @@ class PaperEngine:
         return exits
 
     # --- snapshots --------------------------------------------------------
+    def get_closed_trades(self, since_ts: float | None = None) -> list[dict]:
+        """Return closed trade history, optionally filtered by exit timestamp."""
+        if since_ts is None:
+            return list(self.closed_trades)
+        return [t for t in self.closed_trades if t.get("exit_ts", 0) >= since_ts]
+
     def snapshot(self) -> dict:
         marks = {}
         for sym in self.positions:

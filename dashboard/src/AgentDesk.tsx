@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { apiGet, apiPost, parsePct, parseNum, ApiError } from "./api";
+import type { Reflection } from "./types";
 
 interface AgentRecord {
   name: string;
@@ -18,6 +20,21 @@ interface Cycle {
   agents: AgentRecord[];
   decision: AgentRecord | null;
   execution?: { executed: boolean; reason?: string };
+}
+
+interface LoopConfig {
+  sl_pct?: number;
+  tp_pct?: number;
+  trailing_pct?: number;
+  target_price?: number | null;
+  auto_trade?: boolean;
+  lock_stop?: boolean;
+}
+
+interface SwarmPreset {
+  name: string;
+  label?: string;
+  team?: string;
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -91,26 +108,27 @@ export default function AgentDesk() {
     lock_stop: false,
   });
   const [reflOpen, setReflOpen] = useState(false);
-  const [reflections, setReflections] = useState<any[]>([]);
+  const [reflections, setReflections] = useState<Reflection[]>([]);
   const [reflBusy, setReflBusy] = useState(false);
+
+  function handleApiErr(e: unknown, fallback: string) {
+    setExecMsg(e instanceof ApiError ? `✗ ${e.message}` : e instanceof Error ? e.message : fallback);
+  }
 
   async function loadLoopStatus() {
     try {
-      const res = await fetch("/api/agents/loop/status");
-      if (res.ok) {
-        const s = await res.json();
-        setLoopRunning(Boolean(s.running));
-        if (s.config) {
-          setCfg((c) => ({
-            ...c,
-            sl_pct: String(s.config.sl_pct != null ? s.config.sl_pct * 100 : c.sl_pct),
-            tp_pct: String(s.config.tp_pct != null ? s.config.tp_pct * 100 : c.tp_pct),
-            trailing_pct: String(s.config.trailing_pct != null ? s.config.trailing_pct * 100 : c.trailing_pct),
-            target_price: s.config.target_price ? String(s.config.target_price) : c.target_price,
-            auto_trade: s.config.auto_trade !== false,
-            lock_stop: Boolean(s.config.lock_stop),
-          }));
-        }
+      const s = await apiGet<{ running: boolean; config?: LoopConfig }>("/api/agents/loop/status");
+      setLoopRunning(Boolean(s.running));
+      if (s.config) {
+        setCfg((c) => ({
+          ...c,
+          sl_pct: s.config!.sl_pct != null ? String(s.config!.sl_pct * 100) : c.sl_pct,
+          tp_pct: s.config!.tp_pct != null ? String(s.config!.tp_pct * 100) : c.tp_pct,
+          trailing_pct: s.config!.trailing_pct != null ? String(s.config!.trailing_pct * 100) : c.trailing_pct,
+          target_price: s.config!.target_price ? String(s.config!.target_price) : c.target_price,
+          auto_trade: s.config!.auto_trade !== false,
+          lock_stop: Boolean(s.config!.lock_stop),
+        }));
       }
     } catch {
       /* silencioso */
@@ -121,33 +139,32 @@ export default function AgentDesk() {
     setLoopBusy(true);
     try {
       const url = loopRunning ? "/api/agents/loop/stop" : "/api/agents/loop/start";
+      const sl = parsePct(cfg.sl_pct);
+      const tp = parsePct(cfg.tp_pct);
+      const tr = parsePct(cfg.trailing_pct);
+      const target = cfg.target_price ? parseNum(cfg.target_price) : null;
+      if (!loopRunning && (sl === null || tp === null || tr === null || (cfg.target_price !== "" && target === null))) {
+        setExecMsg("✗ Valores inválidos (use números ≥ 0)");
+        return;
+      }
       const body = loopRunning
         ? {}
         : {
             team: preset,
             symbol: "BTCUSDT",
             interval: 20,
-            sl_pct: parseFloat(cfg.sl_pct) / 100,
-            tp_pct: parseFloat(cfg.tp_pct) / 100,
-            trailing_pct: parseFloat(cfg.trailing_pct) / 100,
-            target_price: cfg.target_price ? parseFloat(cfg.target_price) : null,
+            sl_pct: sl ?? 0,
+            tp_pct: tp ?? 0,
+            trailing_pct: tr ?? 0,
+            target_price: target,
             auto_trade: cfg.auto_trade,
             lock_stop: cfg.lock_stop,
           };
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setLoopRunning(Boolean(data.running));
-        setExecMsg(data.running ? "▶ Loop ativo — agents decidem quando operar" : "■ Loop parado");
-      } else {
-        setExecMsg(`✗ ${data.error ?? "falha"}`);
-      }
+      const data = await apiPost<{ running: boolean; error?: string }>(url, body);
+      setLoopRunning(Boolean(data.running));
+      setExecMsg(data.running ? "▶ Loop ativo — agents decidem quando operar" : "■ Loop parado");
     } catch (e) {
-      setExecMsg(e instanceof Error ? e.message : "erro ao controlar loop");
+      handleApiErr(e, "erro ao controlar loop");
     } finally {
       setLoopBusy(false);
     }
@@ -155,11 +172,8 @@ export default function AgentDesk() {
 
   async function loadReflections() {
     try {
-      const res = await fetch("/api/agents/reflections");
-      if (res.ok) {
-        const s = await res.json();
-        setReflections(s.reflections ?? []);
-      }
+      const s = await apiGet<{ reflections: Reflection[] }>("/api/agents/reflections");
+      setReflections(s.reflections ?? []);
     } catch {
       /* silencioso */
     }
@@ -169,19 +183,11 @@ export default function AgentDesk() {
     if (!cycle) return;
     setReflBusy(true);
     try {
-      const res = await fetch(`/api/agents/cycle/${cycle.cycle_id}/reflection`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setReflOpen(true);
-        await loadReflections();
-      } else {
-        setExecMsg(`✗ ${data.error ?? "falha ao refletir"}`);
-      }
+      await apiPost(`/api/agents/cycle/${cycle.cycle_id}/reflection`, {});
+      setReflOpen(true);
+      await loadReflections();
     } catch (e) {
-      setExecMsg(e instanceof Error ? e.message : "erro ao refletir");
+      handleApiErr(e, "erro ao refletir");
     } finally {
       setReflBusy(false);
     }
@@ -189,8 +195,8 @@ export default function AgentDesk() {
 
   async function loadPresets() {
     try {
-      const res = await fetch("/api/swarm-presets");
-      if (res.ok) setPresets((await res.json()) as SwarmPreset[]);
+      const data = await apiGet<SwarmPreset[]>("/api/swarm-presets");
+      setPresets(data);
     } catch {
       /* silencioso */
     }
@@ -198,11 +204,8 @@ export default function AgentDesk() {
 
   async function loadMode() {
     try {
-      const res = await fetch("/api/mode");
-      if (res.ok) {
-        const m = await res.json();
-        setMode(m.mode === "real" ? "real" : "demo");
-      }
+      const m = await apiGet<{ mode: string }>("/api/mode");
+      setMode(m.mode === "real" ? "real" : "demo");
     } catch {
       /* silencioso */
     }
@@ -212,11 +215,10 @@ export default function AgentDesk() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/agents/cycle?team=${encodeURIComponent(preset)}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setCycle((await res.json()) as Cycle);
+      const data = await apiGet<Cycle>(`/api/agents/cycle?team=${encodeURIComponent(preset)}`);
+      setCycle(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "erro ao carregar agentes");
+      setError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : "erro ao carregar agentes");
     } finally {
       setLoading(false);
     }
@@ -227,13 +229,11 @@ export default function AgentDesk() {
     setExecuting(true);
     setExecMsg(null);
     try {
-      const res = await fetch("/api/agents/execute", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cycle_id: cycle.cycle_id, team: cycle.team ?? null }),
-      });
-      const data = await res.json();
-      if (res.ok && data.ok) {
+      const data = await apiPost<{ ok: boolean; error?: string; execution?: { result?: { order?: { side?: string; qty?: number | string } } } }>(
+        "/api/agents/execute",
+        { cycle_id: cycle.cycle_id, team: cycle.team ?? null },
+      );
+      if (data.ok) {
         const r = data.execution?.result ?? {};
         setExecMsg(`✓ Ordem ${r.order?.side?.toUpperCase()} ${r.order?.qty} executada`);
         load(); // refresh cycle
@@ -241,7 +241,7 @@ export default function AgentDesk() {
         setExecMsg(`✗ ${data.error ?? "falha"}`);
       }
     } catch (e) {
-      setExecMsg(e instanceof Error ? e.message : "erro ao executar");
+      handleApiErr(e, "erro ao executar");
     } finally {
       setExecuting(false);
     }
@@ -390,7 +390,7 @@ export default function AgentDesk() {
                     <li key={j}>{ins}</li>
                   ))}
                 </ul>
-                {r.recommendations?.length > 0 && (
+                {(r.recommendations?.length ?? 0) > 0 && (
                   <div className="reflection-card__recs">
                     <strong>Recomendações:</strong>
                     <ul>{(r.recommendations ?? []).map((rec: string, k: number) => (<li key={k}>{rec}</li>))}</ul>

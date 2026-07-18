@@ -105,6 +105,7 @@ export default function BacktestReport() {
     <article className="report-view">
       <header className="report-header">
         <Link to="/browse" className="back-link">← Browse</Link>
+        <Link to="/" className="back-link back-link-home">⌂ Home</Link>
         <h1 className="report-title">
           {report.symbol} / {report.strategy}
         </h1>

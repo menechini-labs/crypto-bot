@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { apiGet, apiPost } from "./api";
 import type { SignalScoreResponse } from "./types";
 
 /* Gera uma serie sintetica de closes para teste rapido */
@@ -84,13 +85,11 @@ export default function ScorePanel() {
         setLoading(false);
         return;
       }
-      const res = await fetch("/api/score", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ closes: parsed, signal, has_position: false }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setResult((await res.json()) as SignalScoreResponse);
+      const j = await apiPost<SignalScoreResponse>(
+        "/api/score",
+        { closes: parsed, signal, has_position: false },
+      );
+      setResult(j);
       requestAnimationFrame(() => setReveal(true));
     } catch (e) {
       setError(e instanceof Error ? e.message : "erro");
@@ -113,13 +112,10 @@ export default function ScorePanel() {
         setLoading(false);
         return;
       }
-      const res = await fetch("/api/llm-signal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ closes: parsed, has_position: false, signal }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const j = (await res.json()) as SignalScoreResponse & { llm_enabled: boolean };
+      const j = (await apiPost<SignalScoreResponse & { llm_enabled: boolean }>(
+        "/api/llm-signal",
+        { closes: parsed, has_position: false, signal },
+      ));
       setResult(j);
       setSignal(j.signal as "buy" | "sell" | "hold");
       requestAnimationFrame(() => setReveal(true));
@@ -139,6 +135,25 @@ export default function ScorePanel() {
   const verdict =
     conf >= 0.4 && risk >= 0.5 ? "EXECUTAR" : "REJEITAR";
 
+  async function fetchReal() {
+    setLoading(true);
+    setError(null);
+    try {
+      const j = await apiGet<{ closes: number[] }>(
+        "/api/market/closes?symbol=BTCUSDT&timeframe=1h&limit=100",
+      );
+      if (Array.isArray(j.closes) && j.closes.length >= 20) {
+        setCloses(j.closes.join(","));
+      } else {
+        setError("Sem dados de mercado disponiveis.");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "erro ao buscar mercado");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <section className="panel sig">
       <header className="sig__head">
@@ -150,9 +165,15 @@ export default function ScorePanel() {
       </header>
 
       <p className="sig__hint">
-        Cole uma série de closes (CSV) ou gere uma sintética. O motor aplica{" "}
+        Cole uma série de closes (CSV) ou busque dados reais da Binance. O motor aplica{" "}
         <code>score_signal</code> + <code>should_execute</code> (confiança ≥ 0.40, risco ≥
         0.50).
+      </p>
+
+      <p className="sig__hint sig__hint--real">
+        <button type="button" className="sig__real" onClick={fetchReal} disabled={loading}>
+          ⬇ BTCUSDT real (1h, 100 closes)
+        </button>
       </p>
 
       <div className="sig__grid">

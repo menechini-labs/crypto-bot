@@ -38,8 +38,8 @@ export async function fetchStrategies(
 
 export async function fetchStats(): Promise<{
   totalStrategies: number;
-  averagePnL: number;
-  averageSharpe: number;
+  averagePnL: number | null;
+  averageSharpe: number | null;
 }> {
   return request("/stats");
 }
@@ -83,5 +83,32 @@ export async function fetchReflections(
     "/reflections",
     new URLSearchParams({ limit: String(limit) }),
   ).then((r) => r.reflections);
+}
+
+/** External reference URLs (mcp-api TraderDev) */
+export async function fetchExternalSources(): Promise<{
+  backtest: string;
+  browse: string;
+}> {
+  return request<{ backtest: string; browse: string }>("/external");
+}
+
+/* === Mode (DEMO / REAL) === */
+
+export interface ModeState {
+  mode: "demo" | "real";
+  real_available: boolean;
+  real_active: boolean;
+}
+
+export async function fetchMode(): Promise<ModeState> {
+  return request<ModeState>("/mode");
+}
+
+export async function setMode(mode: "demo" | "real"): Promise<{
+  mode: string;
+  real_active: boolean;
+}> {
+  return post<{ mode: string; real_active: boolean }>("/mode", { mode });
 }
 

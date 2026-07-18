@@ -7,6 +7,7 @@ Regras:
 - load_history retorna lista de registros.
 - Tudo stdlib (sem pandas).
 """
+
 import os
 import tempfile
 import unittest
@@ -17,7 +18,7 @@ from core.reporter import append_equity, latest_equity, load_history
 class TestReporter(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
-        self.path = os.path.join(self.tmp, "equity.json")
+        self.path = os.path.join(self.tmp, 'equity.json')
 
     def test_append_creates_file(self):
         self.assertFalse(os.path.exists(self.path))
@@ -25,19 +26,25 @@ class TestReporter(unittest.TestCase):
         self.assertTrue(os.path.exists(self.path))
         hist = load_history(self.path)
         self.assertEqual(len(hist), 1)
-        self.assertEqual(hist[0]["equity"], 1000.0)
+        self.assertEqual(hist[0]['equity'], 1000.0)
 
     def test_append_multiple_cycles(self):
         append_equity(self.path, cycle=0, equity=1000.0, pnl=0.0, positions={})
-        append_equity(self.path, cycle=1, equity=1010.0, pnl=10.0, positions={"BTC/USDT": {"qty": 0.01, "avg_price": 64000.0}})
+        append_equity(
+            self.path,
+            cycle=1,
+            equity=1010.0,
+            pnl=10.0,
+            positions={'BTC/USDT': {'qty': 0.01, 'avg_price': 64000.0}},
+        )
         hist = load_history(self.path)
         self.assertEqual(len(hist), 2)
-        self.assertEqual(hist[1]["cycle"], 1)
-        self.assertEqual(hist[1]["pnl"], 10.0)
+        self.assertEqual(hist[1]['cycle'], 1)
+        self.assertEqual(hist[1]['pnl'], 10.0)
 
     def test_load_history_empty_file(self):
-        with open(self.path, "w") as f:
-            f.write("")
+        with open(self.path, 'w') as f:
+            f.write('')
         # nao deve quebrar
         self.assertEqual(load_history(self.path), [])
 
@@ -50,5 +57,5 @@ class TestReporter(unittest.TestCase):
         self.assertIsNone(latest_equity(self.path))
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

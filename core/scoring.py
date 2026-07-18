@@ -1,5 +1,6 @@
 # core/scoring.py
 """Sistema de scoring para sinais de trading (stdlib-only)."""
+
 from __future__ import annotations
 
 import statistics
@@ -10,30 +11,49 @@ from typing import Any
 @dataclass(frozen=True)
 class SignalScore:
     """Resultado do scoring de um sinal."""
-    signal: str              # "buy" | "sell" | "hold"
-    confidence: float        # 0.0 - 1.0
-    risk_score: float        # 0.0 - 1.0 (maior = mais seguro)
-    composite: float         # weighted combination
+
+    signal: str  # "buy" | "sell" | "hold"
+    confidence: float  # 0.0 - 1.0
+    risk_score: float  # 0.0 - 1.0 (maior = mais seguro)
+    composite: float  # weighted combination
     details: dict[str, Any]  # breakdown para auditoria
 
 
 # Pesos padrao (somam 1.0)
 DEFAULT_WEIGHTS = {
-    "trend": 0.30,
-    "momentum": 0.25,
-    "volatility": 0.20,
-    "risk_reward": 0.15,
-    "regime": 0.10,
+    'trend': 0.30,
+    'momentum': 0.25,
+    'volatility': 0.20,
+    'risk_reward': 0.15,
+    'regime': 0.10,
 }
 
 # Pesos ajustados por regime de mercado.
 # Em lateral, tendencia eh ruido -> menos peso em trend, mais em vol/risk_reward.
 # Em tendencia, alinhar direcao importa mais.
 REGIME_WEIGHTS = {
-    "uptrend": {"trend": 0.45, "momentum": 0.25, "volatility": 0.10, "risk_reward": 0.15, "regime": 0.05},
-    "downtrend": {"trend": 0.45, "momentum": 0.25, "volatility": 0.10, "risk_reward": 0.15, "regime": 0.05},
-    "lateral": {"trend": 0.10, "momentum": 0.20, "volatility": 0.35, "risk_reward": 0.25, "regime": 0.10},
-    "unknown": DEFAULT_WEIGHTS,
+    'uptrend': {
+        'trend': 0.45,
+        'momentum': 0.25,
+        'volatility': 0.10,
+        'risk_reward': 0.15,
+        'regime': 0.05,
+    },
+    'downtrend': {
+        'trend': 0.45,
+        'momentum': 0.25,
+        'volatility': 0.10,
+        'risk_reward': 0.15,
+        'regime': 0.05,
+    },
+    'lateral': {
+        'trend': 0.10,
+        'momentum': 0.20,
+        'volatility': 0.35,
+        'risk_reward': 0.25,
+        'regime': 0.10,
+    },
+    'unknown': DEFAULT_WEIGHTS,
 }
 
 
@@ -64,15 +84,15 @@ def calculate_volatility(closes: list[float], window: int = 14) -> float:
 def detect_regime(closes: list[float], fast: int = 20, slow: int = 50) -> str:
     """Classifica regime via SMA crossover."""
     if len(closes) < slow:
-        return "unknown"
+        return 'unknown'
     sma_fast = statistics.mean(closes[-fast:])
     sma_slow = statistics.mean(closes[-slow:])
     diff_pct = (sma_fast - sma_slow) / sma_slow * 100
     if diff_pct > 2:
-        return "uptrend"
+        return 'uptrend'
     if diff_pct < -2:
-        return "downtrend"
-    return "lateral"
+        return 'downtrend'
+    return 'lateral'
 
 
 def support_resistance(closes: list[float], window: int = 20) -> tuple[float, float]:
@@ -125,20 +145,20 @@ def score_signal(
 
     # 1. Trend alignment
     trend_map = {
-        ("buy", "uptrend"): 1.0,
-        ("buy", "lateral"): 0.5,
-        ("buy", "downtrend"): 0.0,
-        ("sell", "downtrend"): 1.0,
-        ("sell", "lateral"): 0.5,
-        ("sell", "uptrend"): 0.0,
+        ('buy', 'uptrend'): 1.0,
+        ('buy', 'lateral'): 0.5,
+        ('buy', 'downtrend'): 0.0,
+        ('sell', 'downtrend'): 1.0,
+        ('sell', 'lateral'): 0.5,
+        ('sell', 'uptrend'): 0.0,
     }
     trend_score = trend_map.get((signal, regime), 0.5)
 
     # 2. Momentum (RSI)
     rsi_val = rsi(closes)
-    if signal == "buy":
+    if signal == 'buy':
         momentum = _normalize(rsi_val, 30, 70)  # ideal 30-70, compra <70
-    elif signal == "sell":
+    elif signal == 'sell':
         momentum = _normalize(100 - rsi_val, 30, 70)
     else:
         momentum = 0.5
@@ -149,31 +169,31 @@ def score_signal(
     volatility = _clamp(1.0 - (vol - 1.0) / 4.0)  # 1%->1.0, 5%->0.0
 
     # 4. Risk/Reward
-    sl_pct = ctx.get("sl_pct", 0.05)
-    tp_pct = ctx.get("tp_pct", 0.10)
+    sl_pct = ctx.get('sl_pct', 0.05)
+    tp_pct = ctx.get('tp_pct', 0.10)
     rr = tp_pct / sl_pct if sl_pct > 0 else 0
     risk_reward = _clamp(rr / 3.0)  # RR 3:1 = 1.0
 
     # 5. Regime consistency
-    regime_score = 1.0 if regime != "unknown" else 0.5
+    regime_score = 1.0 if regime != 'unknown' else 0.5
 
     # --- Composite ---
     components = {
-        "trend": trend_score,
-        "momentum": momentum,
-        "volatility": volatility,
-        "risk_reward": risk_reward,
-        "regime": regime_score,
+        'trend': trend_score,
+        'momentum': momentum,
+        'volatility': volatility,
+        'risk_reward': risk_reward,
+        'regime': regime_score,
     }
     composite = sum(components[k] * weights[k] for k in weights)
     confidence = abs(composite - 0.5) * 2  # 0.5->0, 1.0->1, 0.0->1
 
     # Risk score: combina volatility + risk_reward + position guard
-    position_guard = 0.0 if (has_position and signal == "buy") else 1.0
+    position_guard = 0.0 if (has_position and signal == 'buy') else 1.0
     risk_score = _clamp((volatility + risk_reward + position_guard) / 3.0)
 
     # Ajuste final: hold tem confidence baixa por definicao
-    if signal == "hold":
+    if signal == 'hold':
         confidence *= 0.3
         composite = 0.5
 
@@ -183,19 +203,19 @@ def score_signal(
         risk_score=round(risk_score, 3),
         composite=round(composite, 3),
         details={
-            "components": {k: round(v, 3) for k, v in components.items()},
-            "regime": regime,
-            "rsi": round(rsi_val, 1),
-            "volatility_pct": round(vol, 2),
-            "risk_reward_ratio": round(rr, 2),
-            "weights": weights,
+            'components': {k: round(v, 3) for k, v in components.items()},
+            'regime': regime,
+            'rsi': round(rsi_val, 1),
+            'volatility_pct': round(vol, 2),
+            'risk_reward_ratio': round(rr, 2),
+            'weights': weights,
         },
     )
 
 
 def should_execute(score: SignalScore, min_confidence: float = 0.4, min_risk: float = 0.5) -> bool:
     """Decide se executa baseado em thresholds."""
-    if score.signal == "hold":
+    if score.signal == 'hold':
         return False
     return score.confidence >= min_confidence and score.risk_score >= min_risk
 
@@ -204,12 +224,12 @@ def explain_score(score: SignalScore) -> str:
     """Gera explicacao legivel para logs/debug."""
     d = score.details
     return (
-        f"Signal: {score.signal.upper()} | "
-        f"Confidence: {score.confidence:.0%} | "
-        f"Risk: {score.risk_score:.0%} | "
-        f"Composite: {score.composite:.2f} | "
-        f"Regime: {d['regime']} | "
-        f"RSI: {d['rsi']} | "
-        f"Vol: {d['volatility_pct']}% | "
-        f"RR: {d['risk_reward_ratio']:.1f}"
+        f'Signal: {score.signal.upper()} | '
+        f'Confidence: {score.confidence:.0%} | '
+        f'Risk: {score.risk_score:.0%} | '
+        f'Composite: {score.composite:.2f} | '
+        f'Regime: {d["regime"]} | '
+        f'RSI: {d["rsi"]} | '
+        f'Vol: {d["volatility_pct"]}% | '
+        f'RR: {d["risk_reward_ratio"]:.1f}'
     )

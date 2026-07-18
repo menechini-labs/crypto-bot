@@ -4,15 +4,16 @@ export interface Strategy {
   symbol: string;
   timeframe: string;
   author: string;
-  netProfitPct: number;
-  profitFactor: number;
-  maxDrawdownPct: number;
-  winRatePct: number;
-  sharpeRatio: number;
-  sortinoRatio: number;
-  totalTrades: number;
+  netProfitPct: number | null;
+  profitFactor: number | null;
+  maxDrawdownPct: number | null;
+  winRatePct: number | null;
+  sharpeRatio: number | null;
+  sortinoRatio: number | null;
+  totalTrades: number | null;
   equityCurve: number[];
   forkUrl: string;
+  hasBacktest?: boolean;
 }
 
 export interface BacktestParams {
@@ -65,6 +66,8 @@ export interface BacktestReport {
   max_drawdown_pct: number;
   win_rate: number;
   sharpe: number;
+  sharpe_ci?: [number, number];
+  turnover?: number;
   cagr: number;
   trades: number;
   profit_factor?: number;

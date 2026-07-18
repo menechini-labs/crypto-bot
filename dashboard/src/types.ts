@@ -53,3 +53,13 @@ export interface SignalScoreResponse {
   explanation: string;
   llm_enabled?: boolean;
 }
+
+export interface Reflection {
+  source: string;
+  cycle_id: number;
+  total_trades: number;
+  timestamp?: string;
+  insights: string[];
+  recommendations?: string[];
+  metrics?: Record<string, unknown>;
+}

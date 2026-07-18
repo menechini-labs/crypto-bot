@@ -40,7 +40,9 @@ class EventBus:
         self._handlers: dict[str, list[EventHandler]] = {}
 
     def on(self, event_type: str, handler: EventHandler) -> None:
-        """Registra handler para um tipo de evento."""
+        """Registra handler para um tipo de evento.
+        Use '*' para receber todos os tipos de evento.
+        """
         self._handlers.setdefault(event_type, []).append(handler)
         log.debug('EventBus: registered handler for %s (total=%d)', event_type, len(self._handlers[event_type]))
 
@@ -51,13 +53,17 @@ class EventBus:
             handlers.remove(handler)
             log.debug('EventBus: removed handler for %s', event_type)
 
+    @property
+    def registered_types(self) -> list[str]:
+        return [k for k, v in self._handlers.items() if v] if not self._handlers.get('*') else ['*']
+
     async def emit(self, event_type: str, data: dict[str, Any]) -> None:
         """Dispara evento para todos os handlers registrados.
 
         Handlers síncronos são executados via asyncio.to_thread.
         Handlers assíncronos aguardados com gather.
         """
-        handlers = self._handlers.get(event_type, [])
+        handlers = self._handlers.get(event_type, []) + self._handlers.get('*', [])
         if not handlers:
             return
 

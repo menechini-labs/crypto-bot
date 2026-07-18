@@ -6,6 +6,7 @@ and the React SPA frontend (dashboard/dist/) on a single port.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import logging
@@ -43,6 +44,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
+from starlette.responses import StreamingResponse
 
 try:
     import uvicorn
@@ -1488,6 +1490,40 @@ async def download_project() -> FileResponse:
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC_DIR = os.path.join(ROOT_DIR, 'dashboard', 'dist')
 EQUITY_PATH = os.path.join(ROOT_DIR, 'data', 'equity.json')
+
+
+# ---------------------------------------------------------------------------
+# SSE endpoint for live events
+# ---------------------------------------------------------------------------
+
+@app.get('/api/events')
+async def api_events():
+    """Server-Sent Events stream: bridges EventBus to frontend.
+    Returns SSE stream of JSON events from core.event_bus.
+    """
+    from core.event_bus import get_global_bus
+
+    bus = get_global_bus()
+    queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=100)
+
+    from core.event_bus import Event
+
+    async def handler(event: Event) -> None:
+        try:
+            await queue.put({'type': event.type, **event.data})
+        except asyncio.QueueFull:
+            pass  # drop se o frontend estiver muito lento
+
+    bus.on('*', handler)
+    try:
+        async def event_generator():
+            while True:
+                ev = await queue.get()
+                payload = {'type': ev.type, **ev.data}
+                yield f'data: {json.dumps(payload, default=str)}\n\n'
+        return StreamingResponse(event_generator(), media_type='text/event-stream')
+    finally:
+        bus.off('*', handler)
 
 
 @app.get('/equity')

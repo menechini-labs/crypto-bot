@@ -63,3 +63,21 @@ export interface Reflection {
   recommendations?: string[];
   metrics?: Record<string, unknown>;
 }
+
+export interface TemplateRiskMetrics {
+  drawdown_risk: number;
+  gap_risk: number;
+  sequence_risk: number;
+  overall_risk: number;
+  warnings: string[];
+}
+
+export interface BlendedScoreResponse {
+  status: string;
+  signal: string;
+  score: ScoreSignal;
+  blended: ScoreSignal;
+  template_risk: TemplateRiskMetrics;
+  template_adjusted: boolean;
+  explanation: string;
+}

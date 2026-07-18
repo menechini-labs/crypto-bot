@@ -19,7 +19,17 @@ interface Cycle {
   team?: string;
   agents: AgentRecord[];
   decision: AgentRecord | null;
+  guard?: GuardResult;
   execution?: { executed: boolean; reason?: string };
+}
+
+interface GuardResult {
+  passed: boolean;
+  adjustments: string[];
+  original_verdict: string;
+  original_confidence: number;
+  adjusted_verdict: string;
+  adjusted_confidence: number;
 }
 
 interface LoopConfig {
@@ -319,6 +329,18 @@ export default function AgentDesk() {
             conf {dec?.confidence.toFixed(2) ?? "0.00"}
           </span>
         </div>
+        {cycle.guard && (
+          <div className={`agent-desk__guard agent-desk__guard--${cycle.guard.passed ? 'pass' : 'fail'}`}>
+            <span className="agent-desk__guard-label">GUARD</span>
+            <span className="agent-desk__guard-badge">{cycle.guard.passed ? '✓ PASS' : '✗ BLOCK'}</span>
+            {cycle.guard.adjustments.length > 0 && (
+              <span className="agent-desk__guard-adjs">{cycle.guard.adjustments.join('; ')}</span>
+            )}
+            <span className="agent-desk__guard-conf">
+              {cycle.guard.original_confidence.toFixed(2)} → {cycle.guard.adjusted_confidence.toFixed(2)}
+            </span>
+          </div>
+        )}
         <button type="button" className="sig__real" onClick={load} disabled={loading}>
           ⟳ Rodar ciclo
         </button>

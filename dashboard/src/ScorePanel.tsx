@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { apiGet, apiPost } from "./api";
-import type { SignalScoreResponse } from "./types";
+import type { SignalScoreResponse, BlendedScoreResponse } from "./types";
 
 /* Gera uma serie sintetica de closes para teste rapido */
 function genSeries(n: number, kind: "uptrend" | "downtrend" | "lateral"): number[] {
@@ -68,6 +68,7 @@ export default function ScorePanel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SignalScoreResponse | null>(null);
+  const [blended, setBlended] = useState<BlendedScoreResponse | null>(null);
   const [reveal, setReveal] = useState(false);
 
   async function runScore() {
@@ -90,6 +91,34 @@ export default function ScorePanel() {
         has_position: false,
       });
       setResult(j);
+      requestAnimationFrame(() => setReveal(true));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "erro");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function runBlended() {
+    setLoading(true);
+    setError(null);
+    setReveal(false);
+    try {
+      const parsed = closes
+        .split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => !Number.isNaN(n));
+      if (parsed.length < 20) {
+        setError("Informe ao menos 20 valores de closes separados por vírgula.");
+        setLoading(false);
+        return;
+      }
+      const j = await apiPost<BlendedScoreResponse>('/api/score/blended', {
+        closes: parsed,
+        signal,
+        has_position: false,
+      });
+      setBlended(j);
       requestAnimationFrame(() => setReveal(true));
     } catch (e) {
       setError(e instanceof Error ? e.message : "erro");
@@ -202,6 +231,9 @@ export default function ScorePanel() {
             <button type="button" className="sig__llm" onClick={runLLM} disabled={loading}>
               ⟁ LLM
             </button>
+            <button type="button" className="sig__blended" onClick={runBlended} disabled={loading}>
+              ⚖ BLENDED
+            </button>
           </div>
           <textarea
             className="sig__ta"
@@ -218,12 +250,37 @@ export default function ScorePanel() {
 
         {/* coluna de leitura */}
         <div className={`sig__read ${reveal ? "is-reveal" : ""}`}>
-          {!result ? (
+          {blended && !result && (
+            <div className="sig__blended-result">
+              <h3 className="sig__blended-title">⚖ Blended Score c/ Template Risk</h3>
+              <div className="sig__blended-metrics">
+                <div>
+                  <small>Signal</small>
+                  <b>{blended.signal.toUpperCase()}</b>
+                </div>
+                <div>
+                  <small>Score raw</small>
+                  <b>{(blended.score?.composite ?? 0 * 100).toFixed(0)}%</b>
+                </div>
+                <div>
+                  <small>Blended</small>
+                  <b>{(blended.blended?.composite ?? 0 * 100).toFixed(0)}%</b>
+                </div>
+                <div>
+                  <small>Template Risk</small>
+                  <b>{(blended.template_risk?.overall_risk ?? 0 * 100).toFixed(0)}%</b>
+                </div>
+              </div>
+              <p className="sig__explain">{blended.explanation}</p>
+            </div>
+          )}
+          {!result && !blended && (
             <div className="sig__empty">
               <span className="sig__empty-tick">+</span>
               <p>Aguardando sinal…</p>
             </div>
-          ) : (
+          )}
+          {result && (
             <>
               <div className="sig__top">
                 <Gauge value={composite} tone={tone} />

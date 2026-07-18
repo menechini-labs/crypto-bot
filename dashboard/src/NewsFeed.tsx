@@ -1,8 +1,18 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "./api";
 
+function ReliabilityBadge({ sourceId, score }: { sourceId: string; score: number }) {
+  const tone = score >= 0.7 ? 'pos' : score >= 0.5 ? 'warn' : 'neg';
+  return (
+    <span className={`rel-badge rel-badge--${tone}`} title={`source: ${sourceId}`}>
+      <span className="rel-badge__dot" />{(score * 100).toFixed(0)}%
+    </span>
+  );
+}
+
 interface NewsItem {
   source: string;
+  source_id: string;
   title: string;
   url: string;
   published: string;
@@ -75,6 +85,7 @@ export default function NewsFeed() {
           <li key={i} className="news-item">
             <div className="news-item__top">
               <span className="news-item__source">{it.source}</span>
+              <ReliabilityBadge sourceId={it.source_id} score={it.score} />
               <span className={`news-item__sent news-item__sent--${it.sentiment}`}>
                 {it.sentiment}
               </span>

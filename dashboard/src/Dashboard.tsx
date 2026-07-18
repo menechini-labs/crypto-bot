@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import AgentDesk from "./AgentDesk";
 import { ApiError, apiGet } from "./api";
+import EventConsole from "./EventConsole";
 import AnalyzePage from "./browse/AnalyzePage";
 import { fetchMode, type ModeState, setMode } from "./browse/api";
 import BrowseStrategies from "./browse/BrowseStrategies";
@@ -45,7 +46,8 @@ type Tab =
   | "health"
   | "agents"
   | "news"
-  | "tradedesk";
+  | "tradedesk"
+  | "events";
 
 interface NavItem {
   id: Tab;
@@ -63,6 +65,7 @@ const NAV: NavItem[] = [
   { id: "news", label: "News", icon: "❏", group: "Intelligence" },
   { id: "health", label: "Health", icon: "♥", group: "Intelligence" },
   { id: "tradedesk", label: "Trade Desk", icon: "⤬", group: "Execution" },
+  { id: "events", label: "Events", icon: "⚡", group: "Intelligence" },
 ];
 
 /* === custom hook (react-patterns: encapsula estado + efeito) === */
@@ -413,6 +416,7 @@ export default function Dashboard({ initialTab }: { initialTab?: Tab }) {
         {tab === "agents" && <AgentDesk />}
         {tab === "news" && <NewsFeed />}
         {tab === "tradedesk" && <TradeDesk mode={mode.mode} />}
+        {tab === "events" && <EventConsole />}
       </main>
     </div>
   );

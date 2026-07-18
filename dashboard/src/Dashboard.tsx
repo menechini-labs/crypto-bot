@@ -170,9 +170,9 @@ function DashboardTab({ state, lastCycle }: { state: DashboardState; lastCycle: 
 
 /* === componente principal === */
 
-export default function Dashboard() {
+export default function Dashboard({ initialTab }: { initialTab?: Tab }) {
   const { state, lastCycle } = useEquity();
-  const [tab, setTab] = useState<Tab>("dashboard");
+  const [tab, setTab] = useState<Tab>(initialTab || "dashboard");
   const [mode, setModeState] = useState<ModeState>({ mode: "demo", real_available: false, real_active: false });
   const [connected, setConnected] = useState<boolean | null>(null);
   const [confirmReal, setConfirmReal] = useState(false);

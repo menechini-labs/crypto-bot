@@ -33,39 +33,9 @@ def _model() -> str:
 
 
 def _llm_request(prompt: str, max_tokens: int = 256) -> str:
-    """POST prompt to LLM chat endpoint (stdlib-only)."""
-    if not _is_enabled():
-        raise RuntimeError("LLM disabled (ENABLE_LLM=0)")
-    api_key = _api_key()
-    if not api_key:
-        raise ValueError("LLM_API_KEY not configured")
-
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": _model(),
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": max_tokens,
-        "temperature": 0.3,
-    }
-    req = urllib.request.Request(
-        _base_url().rstrip("/") + "/chat/completions",
-        data=json.dumps(payload).encode(),
-        headers=headers,
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode())
-            return data["choices"][0]["message"]["content"].strip().lower()
-    except urllib.error.HTTPError as e:
-        log.error("LLM HTTP error %s: %s", e.code, e.read().decode())
-        raise
-    except Exception:
-        log.exception("LLM request failed")
-        raise
+    """Delegate to shared llm_client.chat()."""
+    from core.llm_client import chat
+    return chat(prompt, max_tokens=max_tokens)
 
 
 def _validate_signal(raw: str, has_position: bool) -> str:

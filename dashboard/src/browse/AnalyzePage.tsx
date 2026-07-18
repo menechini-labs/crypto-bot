@@ -84,6 +84,7 @@ export default function AnalyzePage() {
     <div className="analyze-page">
       <header className="analyze-header">
         <Link to="/browse" className="back-link">← Browse</Link>
+        <Link to="/" className="back-link back-link-home">⌂ Home</Link>
         <h1>🔍 Analyze Crypto</h1>
       </header>
 

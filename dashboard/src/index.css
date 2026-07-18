@@ -1910,3 +1910,8 @@ body {
 .td-table td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); }
 .td-table .pos { color: var(--sig-ok); }
 .td-table .neg { color: var(--sig-rej); }
+
+.back-link-home {
+  margin-left: 0.6rem;
+}
+

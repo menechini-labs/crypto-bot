@@ -149,6 +149,11 @@ async def _warm_backtest_cache() -> None:
     from core.backtest import run_backtest as _run
     reg = _registry_get_all()
     for name in reg:
+        # LLM strategy e avaliada ao vivo; warm_backtest por candle e lento
+        # (cada decide() faz uma chamada de rede). Pula no cache de startup.
+        if name == "llm":
+            logger.info("warm_backtest %s pulado (avaliado ao vivo)", name)
+            continue
         try:
             result = _run(closes, config, symbol="BTCUSDT", strategy_name=name, use_scoring=(name == "llm"))
             _BACKTEST_CACHE[name] = {

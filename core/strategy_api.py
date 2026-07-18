@@ -11,6 +11,7 @@ import mimetypes
 import os
 import json
 import time
+import threading
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -882,6 +883,99 @@ async def api_agents_execute(payload: dict[str, Any]) -> dict[str, Any]:
 async def api_agents_history() -> dict[str, Any]:
     """List of agent-triggered order executions (cycle_id -> order_id -> fill)."""
     return {"status": "ok", "count": len(_AGENT_EXEC_HISTORY), "history": _AGENT_EXEC_HISTORY}
+
+# ---------------------------------------------------------------------------
+# Agent Desk continuous loop control (PLAY / STOP)
+# ---------------------------------------------------------------------------
+
+_AGENT_LOOP_THREAD: threading.Thread | None = None
+_AGENT_LOOP_STOP = threading.Event()
+_AGENT_LOOP_INTERVAL = 20
+_AGENT_LOOP_TEAM = "balanced"
+
+
+def _agent_loop_worker() -> None:
+    """Background worker: runs agent_desk cycles until stop event."""
+    try:
+        from core import agent_desk as _ad
+        from core.market import fetch_ohlcv
+        from core import paper_engine as _pe
+        while not _AGENT_LOOP_STOP.is_set():
+            try:
+                symbol = _AGENT_LOOP_TEAM_SYMBOL if _AGENT_LOOP_TEAM_SYMBOL else "BTCUSDT"
+                candles = fetch_ohlcv(symbol, "1h", 100)
+                closes = [c["close"] for c in candles]
+                cycle = _ad.run_cycle(closes if len(closes) >= 20 else None)
+                decision = cycle["decision"]
+                verdict, conf = decision["verdict"], decision["confidence"]
+                if verdict in ("buy", "sell") and conf >= 0.5:
+                    engine = _pe.get_engine()
+                    snap = engine.snapshot()
+                    avail = snap.get("available_cash", snap.get("cash", 0.0))
+                    qty = _ad._compute_qty(symbol, conf, avail)
+                    if qty > 0:
+                        order = _pe.Order(
+                            symbol=symbol, side=verdict, qty=qty,
+                            sl_pct=0.02, tp_pct=0.05, trailing_pct=0.01,
+                            reason=f"AgentDesk {verdict} (conf {conf:.2f})",
+                            advisory=decision.get("reasoning", ""),
+                        )
+                        res = engine.submit(order)
+                        logging.info("agent_loop %s %s -> ok=%s", verdict, qty, res.get("ok"))
+            except Exception as e:
+                logging.warning("agent_loop error: %s", e)
+            _AGENT_LOOP_STOP.wait(_AGENT_LOOP_INTERVAL)
+    except Exception as e:
+        logging.error("agent_loop worker died: %s", e)
+
+
+_AGENT_LOOP_TEAM_SYMBOL = "BTCUSDT"
+
+
+@app.post("/api/agents/loop/start")
+async def api_agents_loop_start(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    """PLAY: start continuous agent desk loop (REAL mode only)."""
+    global _AGENT_LOOP_THREAD, _AGENT_LOOP_TEAM, _AGENT_LOOP_TEAM_SYMBOL
+    if _MODE != "real" or not _ALLOW_LIVE:
+        raise HTTPException(status_code=403, detail="loop requer modo REAL + ALLOW_LIVE_TRADING=1")
+    if _AGENT_LOOP_THREAD and _AGENT_LOOP_THREAD.is_alive():
+        return {"status": "already_running", "running": True}
+    _AGENT_LOOP_STOP.clear()
+    _AGENT_LOOP_TEAM = (payload or {}).get("team", "balanced")
+    _AGENT_LOOP_TEAM_SYMBOL = (payload or {}).get("symbol", "BTCUSDT")
+    if (payload or {}).get("interval"):
+        try:
+            _AGENT_LOOP_INTERVAL = max(5, int((payload or {}).get("interval")))
+        except (TypeError, ValueError):
+            pass
+    _AGENT_LOOP_THREAD = threading.Thread(target=_agent_loop_worker, daemon=True)
+    _AGENT_LOOP_THREAD.start()
+    return {"status": "started", "running": True, "team": _AGENT_LOOP_TEAM, "symbol": _AGENT_LOOP_TEAM_SYMBOL}
+
+
+@app.post("/api/agents/loop/stop")
+async def api_agents_loop_stop() -> dict[str, Any]:
+    """STOP: halt continuous agent desk loop."""
+    global _AGENT_LOOP_THREAD
+    if not (_AGENT_LOOP_THREAD and _AGENT_LOOP_THREAD.is_alive()):
+        return {"status": "not_running", "running": False}
+    _AGENT_LOOP_STOP.set()
+    _AGENT_LOOP_THREAD = None
+    return {"status": "stopped", "running": False}
+
+
+@app.get("/api/agents/loop/status")
+async def api_agents_loop_status() -> dict[str, Any]:
+    """Current loop state for UI."""
+    running = bool(_AGENT_LOOP_THREAD and _AGENT_LOOP_THREAD.is_alive())
+    return {
+        "status": "ok",
+        "running": running,
+        "team": _AGENT_LOOP_TEAM,
+        "symbol": _AGENT_LOOP_TEAM_SYMBOL,
+        "interval": _AGENT_LOOP_INTERVAL,
+        "mode": _MODE,
+    }
 
 
 # ---------------------------------------------------------------------------

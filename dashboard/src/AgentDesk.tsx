@@ -80,6 +80,43 @@ export default function AgentDesk() {
   const [mode, setMode] = useState<string>("demo");
   const [executing, setExecuting] = useState(false);
   const [execMsg, setExecMsg] = useState<string | null>(null);
+  const [loopRunning, setLoopRunning] = useState(false);
+  const [loopBusy, setLoopBusy] = useState(false);
+
+  async function loadLoopStatus() {
+    try {
+      const res = await fetch("/api/agents/loop/status");
+      if (res.ok) {
+        const s = await res.json();
+        setLoopRunning(Boolean(s.running));
+      }
+    } catch {
+      /* silencioso */
+    }
+  }
+
+  async function toggleLoop() {
+    setLoopBusy(true);
+    try {
+      const url = loopRunning ? "/api/agents/loop/stop" : "/api/agents/loop/start";
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ team: preset, symbol: "BTCUSDT", interval: 20 }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setLoopRunning(Boolean(data.running));
+        setExecMsg(data.running ? "▶ Loop ativo — agents decidem quando operar" : "■ Loop parado");
+      } else {
+        setExecMsg(`✗ ${data.error ?? "falha"}`);
+      }
+    } catch (e) {
+      setExecMsg(e instanceof Error ? e.message : "erro ao controlar loop");
+    } finally {
+      setLoopBusy(false);
+    }
+  }
 
   async function loadPresets() {
     try {
@@ -145,8 +182,10 @@ export default function AgentDesk() {
     loadPresets();
     loadMode();
     load();
+    loadLoopStatus();
     const id = setInterval(load, 30_000);
-    return () => clearInterval(id);
+    const id2 = setInterval(loadLoopStatus, 10_000);
+    return () => { clearInterval(id); clearInterval(id2); };
   }, []);
 
   if (error) return <div className="error" role="alert">{error}</div>;
@@ -175,6 +214,15 @@ export default function AgentDesk() {
         </div>
         <button type="button" className="sig__real" onClick={load} disabled={loading}>
           ⟳ Rodar ciclo
+        </button>
+        <button
+          type="button"
+          className={loopRunning ? "btn btn--stop" : "btn btn--play"}
+          onClick={toggleLoop}
+          disabled={loopBusy || mode !== "real"}
+          title={mode !== "real" ? "Loop requer modo REAL" : (loopRunning ? "Parar loop automático" : "Iniciar loop automático")}
+        >
+          {loopRunning ? "■ STOP" : "▶ PLAY"}
         </button>
       </div>
 

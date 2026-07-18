@@ -1805,6 +1805,11 @@ body {
 .btn--execute { background: linear-gradient(135deg, #3ddc97, #4ade80); color: #04210f; border: none; border-radius: 8px; padding: 0.6rem 1.25rem; font-weight: 700; cursor: pointer; font-size: 0.95rem; }
 .btn--execute:hover:not(:disabled) { box-shadow: 0 0 22px rgba(61,220,151,0.45); }
 .btn--execute:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn--play { background: linear-gradient(135deg, #3ddc97, #4ade80); color: #04210f; border: none; border-radius: 8px; padding: 0.6rem 1.25rem; font-weight: 700; cursor: pointer; font-size: 0.95rem; margin-left: 0.5rem; }
+.btn--play:hover:not(:disabled) { box-shadow: 0 0 22px rgba(61,220,151,0.45); }
+.btn--stop { background: linear-gradient(135deg, #ff7a7a, #ef4444); color: #2b0606; border: none; border-radius: 8px; padding: 0.6rem 1.25rem; font-weight: 700; cursor: pointer; font-size: 0.95rem; margin-left: 0.5rem; }
+.btn--stop:hover:not(:disabled) { box-shadow: 0 0 22px rgba(239,68,68,0.45); }
+.btn--play:disabled, .btn--stop:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .agent-desk__preset label { font-size: 10px; letter-spacing: 0.15em; color: var(--text-dim); text-transform: uppercase; }
 .agent-desk__preset select { background: var(--panel); color: var(--text); border: 1px solid var(--panel-border); border-radius: 8px; padding: 0.5rem 0.65rem; font-size: 0.9rem; }

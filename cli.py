@@ -45,8 +45,14 @@ def run_cycle_with_agents(cfg: dict) -> None:
     """Run a single Agent Desk cycle and submit order via PaperEngine (REAL mode)."""
     from core import agent_desk as _ad
     from core import paper_engine as _pe
+    from core.market import fetch_ohlcv
     symbol = cfg["symbols"][0] if cfg.get("symbols") else "BTCUSDT"
-    closes = _ad.scoring._cached_closes(symbol, "1h", 100) if hasattr(_ad.scoring, "_cached_closes") else []
+    try:
+        candles = fetch_ohlcv(symbol, "1h", 100)
+        closes = [c["close"] for c in candles]
+    except Exception as e:
+        print(f"  -> falha ao buscar dados ({e}); pulando ciclo.")
+        return
     cycle = _ad.run_cycle(closes if len(closes) >= 20 else None)
     decision = cycle["decision"]
     verdict = decision["verdict"]

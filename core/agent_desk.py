@@ -270,7 +270,7 @@ def _compute_qty(symbol: str, confidence: float, available_cash: float) -> float
         from core.risk import RiskManager
         max_not = RiskManager().max_notional(available_cash)
         if notional > max_not:
-            notional = max_not * 0.999
+            notional = max_not * 0.95
             qty = notional / price
     except Exception:
         pass
@@ -298,6 +298,13 @@ def _compute_qty(symbol: str, confidence: float, available_cash: float) -> float
             if step > 0:
                 from decimal import Decimal
                 qty = float((Decimal(str(qty)) / Decimal(str(step))).to_integral_value() * Decimal(str(step)))
+                qty = float(f"{qty:.6f}")
+        # re-validate notional after step rounding
+        final_notional = qty * price
+        if final_notional > max_not:
+            # reduce one step
+            if step > 0:
+                qty = float((Decimal(str(qty)) - Decimal(str(step))).quantize(Decimal(str(step))))
                 qty = float(f"{qty:.6f}")
     except Exception:
         pass

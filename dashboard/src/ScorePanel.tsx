@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { apiGet, apiPost } from "./api";
 import type { SignalScoreResponse } from "./types";
 
 /* Gera uma serie sintetica de closes para teste rapido */
@@ -84,13 +85,11 @@ export default function ScorePanel() {
         setLoading(false);
         return;
       }
-      const res = await fetch("/api/score", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ closes: parsed, signal, has_position: false }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setResult((await res.json()) as SignalScoreResponse);
+      const j = await apiPost<SignalScoreResponse>(
+        "/api/score",
+        { closes: parsed, signal, has_position: false },
+      );
+      setResult(j);
       requestAnimationFrame(() => setReveal(true));
     } catch (e) {
       setError(e instanceof Error ? e.message : "erro");
@@ -113,13 +112,10 @@ export default function ScorePanel() {
         setLoading(false);
         return;
       }
-      const res = await fetch("/api/llm-signal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ closes: parsed, has_position: false, signal }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const j = (await res.json()) as SignalScoreResponse & { llm_enabled: boolean };
+      const j = (await apiPost<SignalScoreResponse & { llm_enabled: boolean }>(
+        "/api/llm-signal",
+        { closes: parsed, has_position: false, signal },
+      ));
       setResult(j);
       setSignal(j.signal as "buy" | "sell" | "hold");
       requestAnimationFrame(() => setReveal(true));
@@ -143,9 +139,9 @@ export default function ScorePanel() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/market/closes?symbol=BTCUSDT&timeframe=1h&limit=100");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const j = await res.json();
+      const j = await apiGet<{ closes: number[] }>(
+        "/api/market/closes?symbol=BTCUSDT&timeframe=1h&limit=100",
+      );
       if (Array.isArray(j.closes) && j.closes.length >= 20) {
         setCloses(j.closes.join(","));
       } else {

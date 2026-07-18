@@ -9,6 +9,7 @@ import AgentDesk from "./AgentDesk";
 import NewsFeed from "./NewsFeed";
 import TradeDesk from "./TradeDesk";
 import { fetchMode, setMode, type ModeState } from "./browse/api";
+import { apiGet, ApiError } from "./api";
 import type { DashboardState, EquityPoint, PortfolioStats } from "./types";
 
 /* === helpers === */
@@ -65,15 +66,13 @@ function useEquity() {
     let active = true;
     const load = async () => {
       try {
-        const res = await fetch("/equity");
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = (await res.json()) as EquityPoint[];
+        const json = await apiGet<EquityPoint[]>("/equity");
         if (!active) return;
         setState({ status: "loaded", data: json });
         if (json.length > 0) setLastCycle(json[json.length - 1].cycle);
       } catch (e) {
         if (active) {
-          const msg = e instanceof Error ? e.message : "erro desconhecido";
+          const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "erro desconhecido";
           setState({ status: "error", error: msg });
         }
       }
@@ -194,8 +193,8 @@ export default function Dashboard({ initialTab }: { initialTab?: Tab }) {
     let active = true;
     const probe = async () => {
       try {
-        const res = await fetch("/api/health");
-        if (active) setConnected(res.ok);
+        await apiGet<unknown>("/api/health");
+        if (active) setConnected(true);
       } catch {
         if (active) setConnected(false);
       }

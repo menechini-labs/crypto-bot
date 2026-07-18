@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { apiGet, ApiError } from "./api";
 
 interface Health {
   status: string;
@@ -33,15 +34,15 @@ export default function HealthPanel() {
     (async () => {
       try {
         const [h, m, r] = await Promise.all([
-          fetch("/api/health").then((x) => x.json()),
-          fetch("/api/metrics").then((x) => x.json()),
-          fetch("/api/risk/state").then((x) => x.json()),
+          apiGet<Health>("/api/health"),
+          apiGet<Metrics>("/api/metrics"),
+          apiGet<RiskState>("/api/risk/state"),
         ]);
         setHealth(h);
         setMetrics(m);
         setRisk(r);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "erro ao carregar health");
+        setError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : "erro ao carregar health");
       }
     })();
   }, []);

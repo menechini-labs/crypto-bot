@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { apiGet, apiPost, ApiError } from "./api";
 
 interface Position {
   id: string;
@@ -52,9 +53,8 @@ export default function TradeDesk({ mode }: { mode: "demo" | "real" }) {
 
   async function refresh() {
     try {
-      const res = await fetch("/api/positions");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setSnap((await res.json()) as Snapshot);
+      const snap = await apiGet<Snapshot>("/api/positions");
+      setSnap(snap);
     } catch (e) {
       setError(e instanceof Error ? e.message : "erro ao carregar posições");
     }
@@ -71,10 +71,9 @@ export default function TradeDesk({ mode }: { mode: "demo" | "real" }) {
     setMsg(null);
     setError(null);
     try {
-      const res = await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const j = await apiPost<{ ok: boolean; error?: string; order?: { id?: string } }>(
+        "/api/orders",
+        {
           symbol: symbol.toUpperCase(),
           side,
           qty: Number(qty),
@@ -83,17 +82,16 @@ export default function TradeDesk({ mode }: { mode: "demo" | "real" }) {
           trailing_pct: trail ? Number(trail) : null,
           reason: reason || `manual ${side} via TradeDesk`,
           advisory: advisory || "consent-first REAL commit (sidebar confirm)",
-        }),
-      });
-      const j = await res.json();
-      if (!res.ok || !j.ok) {
-        setError(j.error || `HTTP ${res.status}`);
+        },
+      );
+      if (!j.ok) {
+        setError(j.error || "ordem rejeitada");
       } else {
         setMsg(`${side.toUpperCase()} paper executado em ${j.order?.id ?? ""}`);
         refresh();
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "erro ao enviar ordem");
+      setError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : "erro ao enviar ordem");
     }
   }
 

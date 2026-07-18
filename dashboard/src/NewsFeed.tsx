@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { apiGet } from "./api";
 
 interface NewsItem {
   source: string;
@@ -26,9 +27,7 @@ export default function NewsFeed() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/news?limit=40");
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        setData((await res.json()) as NewsResponse);
+        setData(await apiGet<NewsResponse>("/api/news?limit=40"));
       } catch (e) {
         setError(e instanceof Error ? e.message : "erro ao carregar notícias");
       }

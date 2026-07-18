@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { fetchStrategies } from "./api";
+import { fetchStrategies, fetchExternalSources } from "./api";
 import BacktestRunner from "./BacktestRunner";
 import FiltersBar from "./FiltersBar";
 import StrategyCard from "./StrategyCard";
@@ -20,6 +20,7 @@ export default function BrowseStrategies() {
   const [filters, setFilters] = useState<Record<string, string | number>>(INIT_FILTERS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [extBrowse, setExtBrowse] = useState<string | null>(null);
 
   function refresh() {
     (async () => {
@@ -37,7 +38,8 @@ export default function BrowseStrategies() {
 
   useEffect(() => {
     refresh();
-    const interval = setInterval(refresh, 30_000); // refresh a cada 30s
+    const interval = setInterval(refresh, 30_000);
+    fetchExternalSources().then(s => setExtBrowse(s.browse)).catch(() => {}); // refresh a cada 30s
     return () => clearInterval(interval);
   }, []);
 
@@ -49,15 +51,15 @@ export default function BrowseStrategies() {
       list = list.filter((s) => s.timeframe === filters.timeframe);
     if (filters.minPnl !== "" && filters.minPnl !== undefined) {
       const v = Number(filters.minPnl);
-      if (!isNaN(v)) list = list.filter((s) => s.netProfitPct >= v);
+      if (!isNaN(v)) list = list.filter((s) => s.netProfitPct !== null && s.netProfitPct >= v);
     }
     if (filters.maxDd !== "" && filters.maxDd !== undefined) {
       const v = Number(filters.maxDd);
-      if (!isNaN(v)) list = list.filter((s) => s.maxDrawdownPct <= v);
+      if (!isNaN(v)) list = list.filter((s) => s.maxDrawdownPct !== null && s.maxDrawdownPct <= v);
     }
     if (filters.minSharpe !== "" && filters.minSharpe !== undefined) {
       const v = Number(filters.minSharpe);
-      if (!isNaN(v)) list = list.filter((s) => s.sharpeRatio >= v);
+      if (!isNaN(v)) list = list.filter((s) => s.sharpeRatio !== null && s.sharpeRatio >= v);
     }
     if (filters.author) list = list.filter((s) => s.author === filters.author);
     return list;
@@ -84,6 +86,11 @@ export default function BrowseStrategies() {
         <div className="browse-actions">
           <button className="btn-secondary" onClick={refresh} title="Recarregar">⟳</button>
           <Link to="/analyze" className="btn-primary">+ Novo Backtest</Link>
+          {extBrowse && (
+            <a href={extBrowse} className="btn-secondary" target="_blank" rel="noopener noreferrer">
+              Browse Externo ↗
+            </a>
+          )}
         </div>
       </header>
 

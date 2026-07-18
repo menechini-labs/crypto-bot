@@ -1,0 +1,38 @@
+{
+  "repository_type": "multi-part",
+  "project_name": "crypto-bot",
+  "parts": [
+    {
+      "part_id": "backend",
+      "project_type_id": "backend",
+      "display_name": "Python Trading Engine / API",
+      "root_path": "core/",
+      "language": "Python 3.11+",
+      "framework": "FastAPI + stdlib (no heavy deps for core logic)",
+      "entry_point": "run_api.py -> uvicorn core.strategy_api:app"
+    },
+    {
+      "part_id": "web",
+      "project_type_id": "web",
+      "display_name": "React Signal Terminal Dashboard",
+      "root_path": "dashboard/",
+      "language": "TypeScript",
+      "framework": "React 18 + Vite",
+      "entry_point": "dashboard/src/main.tsx"
+    }
+  ],
+  "integration_points": [
+    {
+      "from": "web",
+      "to": "backend",
+      "type": "REST API (HTTP/JSON)",
+      "details": "React fetch() -> FastAPI endpoints under /api/* ; backend serves built dashboard/dist/ as static files"
+    },
+    {
+      "from": "backend",
+      "to": "binance",
+      "type": "Public REST/WebSocket (no auth)",
+      "details": "core/market.py + core/market_ws.py read public klines/ticker; never places real orders"
+    }
+  ]
+}

@@ -9,24 +9,27 @@
 
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    rev: v0.15.5
     hooks:
-      - id: ruff
+      - id: ruff-check
         args: [--fix]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/mirrors-pyright
-    rev: v1.1.389
+  - repo: local
     hooks:
       - id: pyright
-        # type-check only; nao bloqueia em modos interativos
-        args: [--pythonversion, "3.11"]
+        name: pyright (type check)
+        # runs the locally-installed pyright (mirrors-pyright upstream is dead)
+        entry: pyright
+        language: system
+        types: [python]
+        pass_filenames: false
 
   - repo: local
     hooks:
       - id: vulture
         name: vulture (dead code, min-confidence 65)
-        entry: vulture --min-confidence 65 .
+        entry: vulture --min-confidence 65 core tests cli.py run_api.py
         language: system
         types: [python]
         pass_filenames: false

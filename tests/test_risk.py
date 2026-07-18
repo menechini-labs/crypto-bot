@@ -1,7 +1,8 @@
 """TDD: regras de gestão de risco (sem ordem real envolvida)."""
-import unittest
-import sys
+
 import os
+import sys
+import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -31,5 +32,5 @@ class TestRiskManager(unittest.TestCase):
         self.assertFalse(self.r.should_take_profit(entry=100.0, current=108.0))
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

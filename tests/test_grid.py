@@ -10,9 +10,10 @@ Regras testadas:
 - decide_grid retorna 'sell' quando preço cruza nível para cima e há posição.
 - Em range estreito, alterna buy/sell conforme o preço oscila.
 """
-import unittest
-import sys
+
 import os
+import sys
+import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -40,27 +41,27 @@ class TestDecideGrid(unittest.TestCase):
         # niveis: [100,125,150,175,200]; 128->118 cruza de 125+ para 100-
         closes = [122.0, 128.0, 118.0]
         sig = decide_grid(closes, self.levels, has_position=False)
-        self.assertEqual(sig, "buy")
+        self.assertEqual(sig, 'buy')
 
     def test_no_buy_if_already_have_position(self):
         closes = [122.0, 128.0, 118.0]
         sig = decide_grid(closes, self.levels, has_position=True)
-        self.assertEqual(sig, "hold")
+        self.assertEqual(sig, 'hold')
 
     def test_sell_when_price_rises_with_position(self):
         # 128->158 cruza de faixa 125+ para 150+
         closes = [118.0, 128.0, 158.0]
         sig = decide_grid(closes, self.levels, has_position=True)
-        self.assertEqual(sig, "sell")
+        self.assertEqual(sig, 'sell')
 
     def test_hold_in_middle_no_cross(self):
         closes = [150.0, 150.0, 150.0]
         sig = decide_grid(closes, self.levels, has_position=False)
-        self.assertEqual(sig, "hold")
+        self.assertEqual(sig, 'hold')
 
     def test_short_series_is_hold(self):
-        self.assertEqual(decide_grid([100.0, 101.0], self.levels, False), "hold")
+        self.assertEqual(decide_grid([100.0, 101.0], self.levels, False), 'hold')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

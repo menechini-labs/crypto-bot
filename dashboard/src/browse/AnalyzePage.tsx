@@ -6,12 +6,20 @@ import Sparkline from "./Sparkline";
 import type { BacktestParams, BacktestReport as ReportData, AnalysisResult, Trade } from "./types";
 
 const REGIMES = ["lateral", "uptrend", "downtrend"];
-const STRATEGIES = ["grid", "grid_dynamic", "combined", "baseline", "default"];
+const STRATEGIES = ["grid", "grid_dynamic", "combined", "baseline", "default", "llm"];
 
 export default function AnalyzePage() {
   const [searchParams] = useSearchParams();
   const initSymbol = searchParams.get("symbol") || "BTCUSDT";
-  const initStrategy = searchParams.get("strategy")?.replace(/^grid_static_/, "grid").replace(/^grid_dynamic_/, "grid_dynamic").replace(/^trend_follow_/, "default") || "grid";
+  // Strategy card IDs are like "grid_dynamic_eth"; the backend expects the base
+  // strategy name ("grid_dynamic"). Map the known prefixes and strip the
+  // "_<SYMBOL>" suffix so the backtest request validates.
+  const initStrategy =
+    searchParams
+      .get("strategy")
+      ?.replace(/^grid_static_.*/, "grid")
+      .replace(/^grid_dynamic_.*/, "grid_dynamic")
+      .replace(/^trend_follow_.*/, "default") || "grid";
 
   const [symbol, setSymbol] = useState(initSymbol);
   const [strategy, setStrategy] = useState(initStrategy);
@@ -76,6 +84,7 @@ export default function AnalyzePage() {
     <div className="analyze-page">
       <header className="analyze-header">
         <Link to="/browse" className="back-link">← Browse</Link>
+        <Link to="/" className="back-link back-link-home">⌂ Home</Link>
         <h1>🔍 Analyze Crypto</h1>
       </header>
 

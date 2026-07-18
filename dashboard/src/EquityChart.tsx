@@ -71,8 +71,8 @@ export default function EquityChart({ points, width = 1000, height = 220 }: Prop
       <title>Evolução da equity</title>
       <defs>
         <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
+          <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
         </linearGradient>
       </defs>
       <line className="axis" x1={pad} y1={height - pad} x2={width - pad} y2={height - pad} />

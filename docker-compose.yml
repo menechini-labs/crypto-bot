@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  crypto-bot:
+    build: .
+    container_name: crypto-bot
+    restart: unless-stopped
+    env_file:
+      - .env  # Load environment variables from .env file (not committed)
+    environment:
+      # Override or set defaults if needed
+      - LOG_LEVEL=INFO
+      - ENABLE_LLM=0
+    volumes:
+      # Persist data (equity.json, market cache, etc.)
+      - ./data:/app/data
+      # Mount config for easy updates without rebuilding
+      - ./config.yaml:/app/config.yaml:ro
+      # Mount .env template for reference (optional)
+      - ./.env.template:/app/.env.template:ro
+    ports:
+      - "8000:8000"  # FastAPI + React dashboard
+    # Optional: limit resources
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: "0.5"
+    #       memory: 512M
+
+  # Optional: Watchtower for auto-updates (uncomment if desired)
+  # watchtower:
+  #   image: containrrr/watchtower
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   command: --interval 300
+
+networks:
+  default:
+    name: crypto-bot-net

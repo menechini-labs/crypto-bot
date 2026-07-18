@@ -9,12 +9,13 @@ Regras:
 - cli.py na raiz deve conseguir importar de core.
 - tests/ deve conseguir importar de core.
 """
+
 import os
 import sys
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CORE = os.path.join(ROOT, "core")
+CORE = os.path.join(ROOT, 'core')
 
 # garante que core/ esta no path (como cli.py e tests fazem)
 if CORE not in sys.path:
@@ -23,21 +24,21 @@ if CORE not in sys.path:
 
 class TestStructure(unittest.TestCase):
     def test_core_dir_exists(self):
-        self.assertTrue(os.path.isdir(CORE), "core/ deve existir")
+        self.assertTrue(os.path.isdir(CORE), 'core/ deve existir')
 
     def test_core_modules_importable(self):
         # lista de modulos esperados em core/
         expected = [
-            "config_loader",
-            "market",
-            "indicators",
-            "strategy",
-            "wallet",
-            "risk",
-            "execution",
-            "backtest",
-            "reporter",
-            "synth",
+            'config_loader',
+            'market',
+            'indicators',
+            'strategy',
+            'wallet',
+            'risk',
+            'execution',
+            'backtest',
+            'reporter',
+            'synth',
         ]
         for mod in expected:
             with self.subTest(module=mod):
@@ -51,5 +52,5 @@ class TestStructure(unittest.TestCase):
         import cli  # noqa: F401
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

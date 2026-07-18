@@ -1,11 +1,12 @@
 """TDD: indicadores MACD e Bollinger Bands (stdlib)."""
-import unittest
-import sys
+
 import os
+import sys
+import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.indicators import macd, bollinger
+from core.indicators import bollinger, macd
 
 
 def trend_up(n=60, start=100.0, step=1.0):
@@ -19,28 +20,29 @@ def sideways(n=60, base=100.0, amp=2.0):
 class TestMACD(unittest.TestCase):
     def test_macd_returns_three_components(self):
         out = macd(trend_up())
-        self.assertIn("macd", out)
-        self.assertIn("signal", out)
-        self.assertIn("hist", out)
+        self.assertIn('macd', out)
+        self.assertIn('signal', out)
+        self.assertIn('hist', out)
 
     def test_macd_positive_in_uptrend(self):
         out = macd(trend_up())
-        self.assertGreater(out["macd"], 0)
+        self.assertGreater(out['macd'], 0)
 
     def test_macd_cross_up_detected(self):
         # hist proximo de zero ou positivo indica cruzamento bullish recente
         out = macd(trend_up())
-        self.assertGreaterEqual(out["hist"], -1e-9)
+        self.assertGreaterEqual(out['hist'], -1e-9)
 
     def test_macd_handles_short_series(self):
         out = macd([1.0, 2.0, 3.0])
         # sem dados suficientes, retorna None
-        self.assertIsNone(out["macd"])
+        self.assertIsNone(out['macd'])
 
 
 class TestBollinger(unittest.TestCase):
     def test_bollinger_returns_band(self):
         mid, upper, lower = bollinger(trend_up(), period=20, k=2.0)
+        assert upper is not None and mid is not None and lower is not None
         self.assertGreater(upper, mid)
         self.assertLess(lower, mid)
 
@@ -48,6 +50,7 @@ class TestBollinger(unittest.TestCase):
         closes = trend_up(40)
         mid, upper, lower = bollinger(closes, period=20, k=2.0)
         last = closes[-1]
+        assert last is not None and lower is not None
         # em forte alta, o preco tende a estar proximo/Acima da banda superior
         self.assertGreaterEqual(last, lower)
 
@@ -55,5 +58,5 @@ class TestBollinger(unittest.TestCase):
         self.assertEqual(bollinger([1.0, 2.0], period=20), (None, None, None))
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

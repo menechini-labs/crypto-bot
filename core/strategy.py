@@ -5,13 +5,14 @@
 - decide_grid / build_grid: grid estático em faixas (opera em lateral).
 - decide_dynamic_grid / build_dynamic_grid: grid dinâmico (recentraliza).
 """
+
 import logging
 
-logger = logging.getLogger("crypto-bot")
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger('crypto-bot')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
 
-from core.indicators import ma_cross, rsi, macd, bollinger
+from core.indicators import bollinger, ma_cross, macd, rsi
 
 
 def decide(closes: list[float], rsi_period: int = 14) -> str:
@@ -24,11 +25,11 @@ def decide(closes: list[float], rsi_period: int = 14) -> str:
     """
     signal = ma_cross(closes)
     r = rsi(closes, rsi_period)
-    if signal == "buy" and (r is None or r < 70):
-        return "buy"
-    if signal == "sell" and (r is None or r > 30):
-        return "sell"
-    return "hold"
+    if signal == 'buy' and (r is None or r < 70):
+        return 'buy'
+    if signal == 'sell' and (r is None or r > 30):
+        return 'sell'
+    return 'hold'
 
 
 def decide_combined(closes: list[float], rsi_period: int = 14) -> str:
@@ -40,7 +41,7 @@ def decide_combined(closes: list[float], rsi_period: int = 14) -> str:
     - caso contrário: HOLD.
     """
     if len(closes) < 35:  # precisamos de slow(26)+signal(9) pro MACD
-        return "hold"
+        return 'hold'
 
     cross = ma_cross(closes)
     r = rsi(closes, rsi_period)
@@ -48,29 +49,29 @@ def decide_combined(closes: list[float], rsi_period: int = 14) -> str:
     _mid, upper, lower = bollinger(closes, period=20, k=2.0)
     last = closes[-1]
 
-    macd_ok = m["hist"] is None or m["hist"] > 0
+    macd_ok = m['hist'] is None or m['hist'] > 0
     not_overbought = r is None or r < 70
     not_above_band = upper is None or last <= upper
 
-    if cross == "buy" and macd_ok and not_overbought and not_above_band:
-        return "buy"
+    if cross == 'buy' and macd_ok and not_overbought and not_above_band:
+        return 'buy'
 
     below_band = lower is None or last >= lower
-    macd_down = m["hist"] is not None and m["hist"] < 0
-    if cross == "sell":
-        return "sell"
+    macd_down = m['hist'] is not None and m['hist'] < 0
+    if cross == 'sell':
+        return 'sell'
     if upper is not None and last >= upper and macd_down and below_band:
-        return "sell"
+        return 'sell'
 
-    return "hold"
+    return 'hold'
 
 
 def build_grid(low: float, high: float, n: int) -> list[float]:
     """Gera n níveis de preço igualmente espaçados entre low e high."""
     if n <= 0:
-        raise ValueError("n must be positive")
+        raise ValueError('n must be positive')
     if low >= high:
-        raise ValueError("low must be < high")
+        raise ValueError('low must be < high')
     step = (high - low) / (n - 1)
     return [low + step * i for i in range(n)]
 
@@ -83,7 +84,7 @@ def decide_grid(closes: list[float], levels: list[float], has_position: bool) ->
     Mantém HOLD caso contrário.
     """
     if len(closes) < 2 or len(levels) < 2:
-        return "hold"
+        return 'hold'
     prev = closes[-2]
     last = closes[-1]
 
@@ -94,10 +95,10 @@ def decide_grid(closes: list[float], levels: list[float], has_position: bool) ->
     crossed_up = level_below(prev) < level_below(last)
 
     if crossed_down and not has_position:
-        return "buy"
+        return 'buy'
     if crossed_up and has_position:
-        return "sell"
-    return "hold"
+        return 'sell'
+    return 'hold'
 
 
 def build_dynamic_grid(center: float, step: float, n: int) -> list[float]:
@@ -106,23 +107,21 @@ def build_dynamic_grid(center: float, step: float, n: int) -> list[float]:
     Permite recentralizar: se o preço foge do range, recalcula com novo centro.
     """
     if n <= 0 or n % 2 == 0:
-        raise ValueError("n must be positive odd")
+        raise ValueError('n must be positive odd')
     if step <= 0:
-        raise ValueError("step must be > 0")
+        raise ValueError('step must be > 0')
     half = (n - 1) // 2
     return [center - step * half + step * i for i in range(n)]
 
 
-def decide_dynamic_grid(
-    closes: list[float], levels: list[float], has_position: bool
-) -> str:
+def decide_dynamic_grid(closes: list[float], levels: list[float], has_position: bool) -> str:
     """Decisão no grid dinâmico (sem look-ahead).
 
     Compra ao cruzar nível para BAIXO (sem posição).
     Vende ao cruzar nível para CIMA (com posição).
     """
     if len(closes) < 2 or len(levels) < 2:
-        return "hold"
+        return 'hold'
     prev, last = closes[-2], closes[-1]
 
     def below(p: float) -> int:
@@ -131,7 +130,7 @@ def decide_dynamic_grid(
     crossed_down = below(prev) > below(last)
     crossed_up = below(prev) < below(last)
     if crossed_down and not has_position:
-        return "buy"
+        return 'buy'
     if crossed_up and has_position:
-        return "sell"
-    return "hold"
+        return 'sell'
+    return 'hold'

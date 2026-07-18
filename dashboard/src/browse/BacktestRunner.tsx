@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { runBacktest } from "./api";
+import { useState, useEffect } from "react";
+import { runBacktest, fetchExternalSources } from "./api";
 import AgentAnalysisCard from "./AgentAnalysisCard";
 import Sparkline from "./Sparkline";
 import type { BacktestParams, BacktestReport, AnalysisResult } from "./types";
@@ -13,7 +13,7 @@ const INIT: BacktestParams = {
 };
 
 const REGIMES = ["lateral", "uptrend", "downtrend"];
-const STRATEGIES = ["grid", "grid_dynamic", "combined", "baseline", "default"];
+const STRATEGIES = ["grid", "grid_dynamic", "combined", "baseline", "default", "llm"];
 
 interface Props {
   onRun?: (params: BacktestParams) => void;
@@ -23,6 +23,11 @@ export default function BacktestRunner({ onRun }: Props) {
   const [params, setParams] = useState(INIT);
   const [result, setResult] = useState<BacktestReport | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [extBUrl, setExtBUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchExternalSources().then(s => setExtBUrl(s.backtest)).catch(() => {});
+  }, []);
   const [status, setStatus] = useState<"idle" | "running">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -118,6 +123,14 @@ export default function BacktestRunner({ onRun }: Props) {
         {status === "running" ? "Rodando..." : "Executar"}
       </button>
 
+      {extBUrl && (
+        <div style={{ marginTop: 16 }}>
+          <a href={extBUrl} className="btn-secondary" target="_blank" rel="noopener noreferrer">
+            Relatório Externo ↗
+          </a>
+        </div>
+      )}
+
       {error && (
         <div className="bt-error" role="alert">
           <p>{error}</p>
@@ -150,9 +163,19 @@ export default function BacktestRunner({ onRun }: Props) {
               <small>Sharpe</small>
               <span>{result.sharpe.toFixed(2)}</span>
             </div>
+            {result.sharpe_ci && (
+              <div className="kpi" style={{ gridColumn: "span 2" }}>
+                <small>Sharpe 95% CI</small>
+                <span className="muted">[{result.sharpe_ci[0]?.toFixed(2) ?? 'N/A'}, {result.sharpe_ci[1]?.toFixed(2) ?? 'N/A'}]</span>
+              </div>
+            )}
             <div className="kpi">
               <small>Win Rate</small>
               <span>{result.win_rate.toFixed(0)}%</span>
+            </div>
+            <div className="kpi">
+              <small>Turnover</small>
+              <span>{((result.turnover ?? 0) * 100).toFixed(1)}%</span>
             </div>
             <div className="kpi">
               <small>Trades</small>

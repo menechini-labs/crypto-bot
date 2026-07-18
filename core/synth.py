@@ -4,13 +4,13 @@ Usado para backtest multi-regime reproduzível: lateral, alta, queda.
 Não substitui dados reais — serve para validar comportamento das
 estratégias em regimes distintos de forma controlada.
 """
+
 import logging
 
-logger = logging.getLogger("crypto-bot")
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger('crypto-bot')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
 
-import math
 import random
 
 
@@ -31,14 +31,14 @@ def make_series(
     seed: garante reproducibilidade.
     """
     if n <= 0:
-        raise ValueError("n must be positive")
-    if regime not in ("lateral", "uptrend", "downtrend"):
-        raise ValueError(f"regime invalido: {regime}")
+        raise ValueError('n must be positive')
+    if regime not in ('lateral', 'uptrend', 'downtrend'):
+        raise ValueError(f'regime invalido: {regime}')
 
     rng = random.Random(seed)
-    if regime == "uptrend":
+    if regime == 'uptrend':
         drift = 0.002
-    elif regime == "downtrend":
+    elif regime == 'downtrend':
         drift = -0.002
 
     prices: list[float] = []

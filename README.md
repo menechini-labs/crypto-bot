@@ -477,6 +477,13 @@ Design constraints and guarantees that shape crypto-bot:
 | **Resilient loop** | Network/JSON failures are logged and skipped — the cycle never crashes |
 | **Observable** | Every cycle persists equity to `data/equity.json` for live dashboard rendering |
 
+## Design System
+
+The dashboard (`dashboard/`) follows the **Signal Terminal** design system — a quant
+signal-terminal aesthetic (mono for data, Syne for display, signal accents, instrument
+frames, corner brackets, hover glow). No Inter / purple-gradient. Full tokens, components,
+and build notes: [README.design.md](README.design.md).
+
 ## License
 
 [MIT](LICENSE) — free for learning, experimentation, and extension. Not financial advice.

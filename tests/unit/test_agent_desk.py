@@ -4,21 +4,21 @@ RiskAgent, StrategyAgent, DecisionCore, run_cycle, run_team."""
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from core.agent_desk import (
     AgentVerdict,
+    _decision_core,
     _metrics_agent,
     _news_agent,
     _risk_agent,
     _strategy_agent,
-    _decision_core,
     run_cycle,
     run_team,
 )
 from core.strategy_registry import registry
-
 
 # ── fixtures ──────────────────────────────────────────────────────────
 
@@ -225,7 +225,6 @@ class TestDecisionCore:
         assert d.verdict in ("buy", "sell", "hold")
 
     def test_risk_warn_reduces_confidence(self, closes_uptrend):
-        from core.risk import RiskManager
         agents = [
             _metrics_agent(closes_uptrend),
             AgentVerdict("RiskAgent", "risk", "warn", 0.9, "Orcamento de drawdown alto."),
@@ -346,9 +345,9 @@ class TestExecuteCycle:
         assert "DEMO" in cycle["execution"]["reason"]
 
     def test_real_submits_order(self, monkeypatch):
-        from core.agent_desk import execute_cycle
+        from core import llm_client
         from core import paper_engine as pe
-        import core.llm_client as llm_client
+        from core.agent_desk import execute_cycle
         # Forca decisao rule-based deterministica (sem depender do LLM ao vivo).
         # Garante caixa suficiente no engine singleton (isolado de outros testes).
         engine = pe.get_engine()
@@ -374,9 +373,9 @@ class TestExecuteCycle:
         assert notional <= RiskManager().max_notional(1000.0) + 1.0  # small epsilon
 
     def test_compute_qty_rounded_to_step(self):
+
         from core.agent_desk import _compute_qty
-        from decimal import Decimal
-        from core.paper_engine import _EXCHANGE_INFO_CACHE, _validate_symbol_filters
+        from core.paper_engine import _validate_symbol_filters
         qty = _compute_qty("BTCUSDT", 0.5, 1000.0)
         # should pass exchangeInfo validation (no step error)
         px = float(__import__("core.market", fromlist=["fetch_ticker"]).fetch_ticker("BTCUSDT")["price"])
@@ -390,9 +389,9 @@ class TestAgentExecuteEndpoint:
         assert True
 
     def test_execute_cycle_with_team(self, monkeypatch):
+        from core import llm_client
         from core.agent_desk import run_team
         from core.swarm_presets import get_preset
-        import core.llm_client as llm_client
         # Isola do LLM ao vivo para decisao deterministica.
         monkeypatch.setattr(llm_client, "is_enabled", lambda: False)
         preset = get_preset("crypto_trading_desk")

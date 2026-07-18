@@ -34,7 +34,12 @@ export default function NewsFeed() {
     })();
   }, []);
 
-  if (error) return <div className="error" role="alert">{error}</div>;
+  if (error)
+    return (
+      <div className="error" role="alert">
+        {error}
+      </div>
+    );
   if (!data) return <div className="loading">Carregando notícias…</div>;
 
   const s = data.sentiment;
@@ -55,7 +60,9 @@ export default function NewsFeed() {
           <ul>
             {data.impact_headlines.map((h, i) => (
               <li key={i}>
-                <a href={h.url} target="_blank" rel="noreferrer">{h.title}</a>
+                <a href={h.url} target="_blank" rel="noreferrer">
+                  {h.title}
+                </a>
                 <span className={`news-sent news-sent--${h.sentiment}`}>{h.sentiment}</span>
               </li>
             ))}
@@ -68,13 +75,19 @@ export default function NewsFeed() {
           <li key={i} className="news-item">
             <div className="news-item__top">
               <span className="news-item__source">{it.source}</span>
-              <span className={`news-item__sent news-item__sent--${it.sentiment}`}>{it.sentiment}</span>
+              <span className={`news-item__sent news-item__sent--${it.sentiment}`}>
+                {it.sentiment}
+              </span>
               {it.impact && <span className="news-item__impact">IMPACTO</span>}
               {it.symbols.map((sym) => (
-                <span key={sym} className="news-item__sym">{sym}</span>
+                <span key={sym} className="news-item__sym">
+                  {sym}
+                </span>
               ))}
             </div>
-            <a className="news-item__title" href={it.url} target="_blank" rel="noreferrer">{it.title}</a>
+            <a className="news-item__title" href={it.url} target="_blank" rel="noreferrer">
+              {it.title}
+            </a>
             <span className="news-item__date muted">{it.published}</span>
           </li>
         ))}

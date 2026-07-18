@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import AgentDesk from "../AgentDesk";
 
 // Mock monaco editor (heavy) and charts so we render the controls only.
@@ -14,7 +14,14 @@ beforeEach(() => {
   vi.stubGlobal("fetch", (url: string) => {
     const ok = (data: unknown) => Promise.resolve({ ok: true, json: () => Promise.resolve(data) });
     if (url.includes("/api/agents/loop/status")) {
-      return ok({ status: "ok", running: false, team: "balanced", symbol: "BTCUSDT", interval: 20, mode: "demo" });
+      return ok({
+        status: "ok",
+        running: false,
+        team: "balanced",
+        symbol: "BTCUSDT",
+        interval: 20,
+        mode: "demo",
+      });
     }
     if (url.includes("/api/agents/reflections")) {
       return ok({ status: "ok", reflections: [] });

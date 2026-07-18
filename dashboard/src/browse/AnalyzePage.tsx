@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { useSearchParams, Link } from "react-router-dom";
-import { runBacktest, triggerBacktestReflection } from "./api";
+import { Link, useSearchParams } from "react-router-dom";
 import AgentAnalysisCard from "./AgentAnalysisCard";
+import { runBacktest, triggerBacktestReflection } from "./api";
 import Sparkline from "./Sparkline";
-import type { BacktestParams, BacktestReport as ReportData, AnalysisResult, Trade } from "./types";
+import type { AnalysisResult, BacktestParams, BacktestReport as ReportData, Trade } from "./types";
 
 const REGIMES = ["lateral", "uptrend", "downtrend"];
 const STRATEGIES = ["grid", "grid_dynamic", "combined", "baseline", "default", "llm"];
@@ -83,8 +83,12 @@ export default function AnalyzePage() {
   return (
     <div className="analyze-page">
       <header className="analyze-header">
-        <Link to="/browse" className="back-link">← Browse</Link>
-        <Link to="/" className="back-link back-link-home">⌂ Home</Link>
+        <Link to="/browse" className="back-link">
+          ← Browse
+        </Link>
+        <Link to="/" className="back-link back-link-home">
+          ⌂ Home
+        </Link>
         <h1>🔍 Analyze Crypto</h1>
       </header>
 
@@ -98,22 +102,42 @@ export default function AnalyzePage() {
           <label>
             <span>Strategy</span>
             <select value={strategy} onChange={(e) => setStrategy(e.target.value)}>
-              {STRATEGIES.map((s) => <option key={s} value={s}>{s}</option>)}
+              {STRATEGIES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
             </select>
           </label>
           <label>
             <span>Regime</span>
             <select value={regime} onChange={(e) => setRegime(e.target.value)}>
-              {REGIMES.map((r) => <option key={r} value={r}>{r}</option>)}
+              {REGIMES.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
             </select>
           </label>
           <label>
             <span>Candles</span>
-            <input type="number" min={50} max={2000} value={candles} onChange={(e) => setCandles(Number(e.target.value))} />
+            <input
+              type="number"
+              min={50}
+              max={2000}
+              value={candles}
+              onChange={(e) => setCandles(Number(e.target.value))}
+            />
           </label>
           <label>
             <span>Seed</span>
-            <input type="number" min={0} max={1_000_000} value={seed} onChange={(e) => setSeed(Number(e.target.value))} />
+            <input
+              type="number"
+              min={0}
+              max={1_000_000}
+              value={seed}
+              onChange={(e) => setSeed(Number(e.target.value))}
+            />
           </label>
         </div>
         <button className="bt-run" onClick={handleRun} disabled={loading}>
@@ -121,7 +145,11 @@ export default function AnalyzePage() {
         </button>
       </section>
 
-      {error && <div className="error" role="alert">{error}</div>}
+      {error && (
+        <div className="error" role="alert">
+          {error}
+        </div>
+      )}
 
       {/* Agent Analysis */}
       {analysis && (
@@ -139,17 +167,44 @@ export default function AnalyzePage() {
         <section className="reflection-panel">
           <h3>🧠 Reflection</h3>
           <div className="reflection-metrics">
-            <div><small>Trades</small><span>{String(reflection.total_trades ?? "—")}</span></div>
-            <div><small>Win Rate</small><span>{reflection.metrics ? `${((reflection.metrics as Record<string, number>).win_rate * 100).toFixed(0)}%` : "—"}</span></div>
-            <div><small>Max Consec Loss</small><span>{reflection.metrics ? String((reflection.metrics as Record<string, number>).max_consecutive_losses ?? 0) : "—"}</span></div>
+            <div>
+              <small>Trades</small>
+              <span>{String(reflection.total_trades ?? "—")}</span>
+            </div>
+            <div>
+              <small>Win Rate</small>
+              <span>
+                {reflection.metrics
+                  ? `${((reflection.metrics as Record<string, number>).win_rate * 100).toFixed(0)}%`
+                  : "—"}
+              </span>
+            </div>
+            <div>
+              <small>Max Consec Loss</small>
+              <span>
+                {reflection.metrics
+                  ? String(
+                      (reflection.metrics as Record<string, number>).max_consecutive_losses ?? 0,
+                    )
+                  : "—"}
+              </span>
+            </div>
           </div>
           {Array.isArray(reflection.insights) && (
-            <ul>{(reflection.insights as string[]).slice(0, 5).map((i, idx) => <li key={idx}>{i}</li>)}</ul>
+            <ul>
+              {(reflection.insights as string[]).slice(0, 5).map((i, idx) => (
+                <li key={idx}>{i}</li>
+              ))}
+            </ul>
           )}
           {Array.isArray(reflection.recommendations) && (
             <div>
               <h4>Recommendations</h4>
-              <ul>{(reflection.recommendations as string[]).slice(0, 3).map((r, idx) => <li key={idx}>{r}</li>)}</ul>
+              <ul>
+                {(reflection.recommendations as string[]).slice(0, 3).map((r, idx) => (
+                  <li key={idx}>{r}</li>
+                ))}
+              </ul>
             </div>
           )}
         </section>
@@ -158,15 +213,38 @@ export default function AnalyzePage() {
       {/* Report */}
       {report && (
         <section className="analyze-report">
-          <h2>Report: {report.symbol} / {report.strategy}</h2>
+          <h2>
+            Report: {report.symbol} / {report.strategy}
+          </h2>
 
           <div className="report-kpis">
-            <div className="kpi-card"><span className="kpi-label">PnL</span><span className={`kpi-value ${report.pnl_pct >= 0 ? "pos" : "neg"}`}>{report.pnl_pct >= 0 ? "+" : ""}{report.pnl_pct.toFixed(2)}%</span></div>
-            <div className="kpi-card"><span className="kpi-label">Max DD</span><span className="kpi-value">{report.max_drawdown_pct.toFixed(2)}%</span></div>
-            <div className="kpi-card"><span className="kpi-label">Win Rate</span><span className="kpi-value">{report.win_rate.toFixed(1)}%</span></div>
-            <div className="kpi-card"><span className="kpi-label">Sharpe</span><span className="kpi-value">{report.sharpe.toFixed(2)}</span></div>
-            <div className="kpi-card"><span className="kpi-label">CAGR</span><span className="kpi-value">{report.cagr.toFixed(1)}%</span></div>
-            <div className="kpi-card"><span className="kpi-label">Trades</span><span className="kpi-value">{report.trades}</span></div>
+            <div className="kpi-card">
+              <span className="kpi-label">PnL</span>
+              <span className={`kpi-value ${report.pnl_pct >= 0 ? "pos" : "neg"}`}>
+                {report.pnl_pct >= 0 ? "+" : ""}
+                {report.pnl_pct.toFixed(2)}%
+              </span>
+            </div>
+            <div className="kpi-card">
+              <span className="kpi-label">Max DD</span>
+              <span className="kpi-value">{report.max_drawdown_pct.toFixed(2)}%</span>
+            </div>
+            <div className="kpi-card">
+              <span className="kpi-label">Win Rate</span>
+              <span className="kpi-value">{report.win_rate.toFixed(1)}%</span>
+            </div>
+            <div className="kpi-card">
+              <span className="kpi-label">Sharpe</span>
+              <span className="kpi-value">{report.sharpe.toFixed(2)}</span>
+            </div>
+            <div className="kpi-card">
+              <span className="kpi-label">CAGR</span>
+              <span className="kpi-value">{report.cagr.toFixed(1)}%</span>
+            </div>
+            <div className="kpi-card">
+              <span className="kpi-label">Trades</span>
+              <span className="kpi-value">{report.trades}</span>
+            </div>
           </div>
 
           {report.equity_curve && report.equity_curve.length > 0 && (
@@ -178,13 +256,34 @@ export default function AnalyzePage() {
 
           <div className="report-details">
             <dl className="details-grid">
-              <div><dt>Symbol</dt><dd>{report.symbol}</dd></div>
-              <div><dt>Strategy</dt><dd>{report.strategy}</dd></div>
-              <div><dt>Regime</dt><dd>{report.regime}</dd></div>
-              <div><dt>Seed</dt><dd>{report.seed}</dd></div>
-              <div><dt>Candles</dt><dd>{report.candles}</dd></div>
-              <div><dt>Initial</dt><dd>${report.equity.toFixed(2)}</dd></div>
-              <div><dt>Final</dt><dd>${report.final_equity.toFixed(2)}</dd></div>
+              <div>
+                <dt>Symbol</dt>
+                <dd>{report.symbol}</dd>
+              </div>
+              <div>
+                <dt>Strategy</dt>
+                <dd>{report.strategy}</dd>
+              </div>
+              <div>
+                <dt>Regime</dt>
+                <dd>{report.regime}</dd>
+              </div>
+              <div>
+                <dt>Seed</dt>
+                <dd>{report.seed}</dd>
+              </div>
+              <div>
+                <dt>Candles</dt>
+                <dd>{report.candles}</dd>
+              </div>
+              <div>
+                <dt>Initial</dt>
+                <dd>${report.equity.toFixed(2)}</dd>
+              </div>
+              <div>
+                <dt>Final</dt>
+                <dd>${report.final_equity.toFixed(2)}</dd>
+              </div>
             </dl>
           </div>
 
@@ -194,7 +293,15 @@ export default function AnalyzePage() {
               <div className="trades-table-wrap">
                 <table className="trades-table">
                   <thead>
-                    <tr><th>#</th><th>Side</th><th>Entry</th><th>Exit</th><th>PnL</th><th>PnL%</th><th>Dur</th></tr>
+                    <tr>
+                      <th>#</th>
+                      <th>Side</th>
+                      <th>Entry</th>
+                      <th>Exit</th>
+                      <th>PnL</th>
+                      <th>PnL%</th>
+                      <th>Dur</th>
+                    </tr>
                   </thead>
                   <tbody>
                     {report.trades_list.slice(0, 50).map((t: Trade, i: number) => (
@@ -204,7 +311,10 @@ export default function AnalyzePage() {
                         <td>${t.entry_price.toFixed(2)}</td>
                         <td>${t.exit_price.toFixed(2)}</td>
                         <td className={t.pnl >= 0 ? "up" : "down"}>${t.pnl.toFixed(2)}</td>
-                        <td className={t.pnl_pct >= 0 ? "up" : "down"}>{t.pnl_pct >= 0 ? "+" : ""}{t.pnl_pct.toFixed(2)}%</td>
+                        <td className={t.pnl_pct >= 0 ? "up" : "down"}>
+                          {t.pnl_pct >= 0 ? "+" : ""}
+                          {t.pnl_pct.toFixed(2)}%
+                        </td>
                         <td>{t.duration_min}min</td>
                       </tr>
                     ))}
@@ -215,7 +325,10 @@ export default function AnalyzePage() {
           )}
 
           <footer className="report-footer">
-            <p>{new Date(report.timestamp).toLocaleString("pt-BR")} · source: {report.source ?? "local"}</p>
+            <p>
+              {new Date(report.timestamp).toLocaleString("pt-BR")} · source:{" "}
+              {report.source ?? "local"}
+            </p>
           </footer>
         </section>
       )}

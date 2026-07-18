@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
-import { runBacktest, fetchExternalSources } from "./api";
+import { useEffect, useState } from "react";
 import AgentAnalysisCard from "./AgentAnalysisCard";
+import { fetchExternalSources, runBacktest } from "./api";
 import Sparkline from "./Sparkline";
-import type { BacktestParams, BacktestReport, AnalysisResult } from "./types";
+import type { AnalysisResult, BacktestParams, BacktestReport } from "./types";
 
 const INIT: BacktestParams = {
   regime: "lateral",
@@ -26,7 +26,9 @@ export default function BacktestRunner({ onRun }: Props) {
   const [extBUrl, setExtBUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchExternalSources().then(s => setExtBUrl(s.backtest)).catch(() => {});
+    fetchExternalSources()
+      .then((s) => setExtBUrl(s.backtest))
+      .catch(() => {});
   }, []);
   const [status, setStatus] = useState<"idle" | "running">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -60,19 +62,14 @@ export default function BacktestRunner({ onRun }: Props) {
       <div className="bt-form">
         <label>
           <span>Símbolo</span>
-          <input
-            value={params.symbol}
-            onChange={(e) => set("symbol", e.target.value)}
-          />
+          <input value={params.symbol} onChange={(e) => set("symbol", e.target.value)} />
         </label>
 
         <label>
           <span>Regime</span>
           <select
             value={params.regime}
-            onChange={(e) =>
-              set("regime", e.target.value as BacktestParams["regime"])
-            }
+            onChange={(e) => set("regime", e.target.value as BacktestParams["regime"])}
           >
             {REGIMES.map((r) => (
               <option key={r} value={r}>
@@ -84,10 +81,7 @@ export default function BacktestRunner({ onRun }: Props) {
 
         <label>
           <span>Estratégia</span>
-          <select
-            value={params.strategy}
-            onChange={(e) => set("strategy", e.target.value)}
-          >
+          <select value={params.strategy} onChange={(e) => set("strategy", e.target.value)}>
             {STRATEGIES.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -151,9 +145,7 @@ export default function BacktestRunner({ onRun }: Props) {
             </div>
             <div className="kpi">
               <small>PnL $</small>
-              <span className={result.pnl_pct >= 0 ? "up" : "down"}>
-                ${result.pnl.toFixed(2)}
-              </span>
+              <span className={result.pnl_pct >= 0 ? "up" : "down"}>${result.pnl.toFixed(2)}</span>
             </div>
             <div className="kpi">
               <small>Drawdown</small>
@@ -166,7 +158,10 @@ export default function BacktestRunner({ onRun }: Props) {
             {result.sharpe_ci && (
               <div className="kpi" style={{ gridColumn: "span 2" }}>
                 <small>Sharpe 95% CI</small>
-                <span className="muted">[{result.sharpe_ci[0]?.toFixed(2) ?? 'N/A'}, {result.sharpe_ci[1]?.toFixed(2) ?? 'N/A'}]</span>
+                <span className="muted">
+                  [{result.sharpe_ci[0]?.toFixed(2) ?? "N/A"},{" "}
+                  {result.sharpe_ci[1]?.toFixed(2) ?? "N/A"}]
+                </span>
               </div>
             )}
             <div className="kpi">

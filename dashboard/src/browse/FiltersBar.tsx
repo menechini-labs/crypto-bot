@@ -16,17 +16,31 @@ export default function FiltersBar({ current, onChange, onClear }: Props) {
     <div className="filters" role="search" aria-label="Filtros de estratégias">
       <label>
         <span>Símbolo</span>
-        <select value={String(current.symbol || "")} onChange={(e) => set("symbol", e.target.value)}>
+        <select
+          value={String(current.symbol || "")}
+          onChange={(e) => set("symbol", e.target.value)}
+        >
           <option value="">Todos</option>
-          {SYMBOLS.map((s) => <option key={s} value={s}>{s}</option>)}
+          {SYMBOLS.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
         </select>
       </label>
 
       <label>
         <span>Timeframe</span>
-        <select value={String(current.timeframe || "")} onChange={(e) => set("timeframe", e.target.value)}>
+        <select
+          value={String(current.timeframe || "")}
+          onChange={(e) => set("timeframe", e.target.value)}
+        >
           <option value="">Todos</option>
-          {TIMEFRAMES.map((t) => <option key={t} value={t}>{t}</option>)}
+          {TIMEFRAMES.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
         </select>
       </label>
 

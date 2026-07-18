@@ -19,8 +19,7 @@ function genSeries(n: number, kind: "uptrend" | "downtrend" | "lateral"): number
 function SegmentBar({ label, value }: { label: string; value: number }) {
   const seg = 12;
   const lit = Math.round(Math.max(0, Math.min(1, value)) * seg);
-  const tone =
-    value >= 0.66 ? "ok" : value >= 0.4 ? "warn" : "rej";
+  const tone = value >= 0.66 ? "ok" : value >= 0.4 ? "warn" : "rej";
   return (
     <div className={`seg seg--${tone}`}>
       <span className="seg__label">{label}</span>
@@ -85,10 +84,11 @@ export default function ScorePanel() {
         setLoading(false);
         return;
       }
-      const j = await apiPost<SignalScoreResponse>(
-        "/api/score",
-        { closes: parsed, signal, has_position: false },
-      );
+      const j = await apiPost<SignalScoreResponse>("/api/score", {
+        closes: parsed,
+        signal,
+        has_position: false,
+      });
       setResult(j);
       requestAnimationFrame(() => setReveal(true));
     } catch (e) {
@@ -112,10 +112,11 @@ export default function ScorePanel() {
         setLoading(false);
         return;
       }
-      const j = (await apiPost<SignalScoreResponse & { llm_enabled: boolean }>(
-        "/api/llm-signal",
-        { closes: parsed, has_position: false, signal },
-      ));
+      const j = await apiPost<SignalScoreResponse & { llm_enabled: boolean }>("/api/llm-signal", {
+        closes: parsed,
+        has_position: false,
+        signal,
+      });
       setResult(j);
       setSignal(j.signal as "buy" | "sell" | "hold");
       requestAnimationFrame(() => setReveal(true));
@@ -130,10 +131,8 @@ export default function ScorePanel() {
   const conf = result?.score?.confidence ?? 0;
   const risk = result?.score?.risk_score ?? 0;
   const composite = result?.score?.composite ?? 0;
-  const tone: "ok" | "warn" | "rej" =
-    composite >= 0.66 ? "ok" : composite >= 0.4 ? "warn" : "rej";
-  const verdict =
-    conf >= 0.4 && risk >= 0.5 ? "EXECUTAR" : "REJEITAR";
+  const tone: "ok" | "warn" | "rej" = composite >= 0.66 ? "ok" : composite >= 0.4 ? "warn" : "rej";
+  const verdict = conf >= 0.4 && risk >= 0.5 ? "EXECUTAR" : "REJEITAR";
 
   async function fetchReal() {
     setLoading(true);
@@ -166,8 +165,7 @@ export default function ScorePanel() {
 
       <p className="sig__hint">
         Cole uma série de closes (CSV) ou busque dados reais da Binance. O motor aplica{" "}
-        <code>score_signal</code> + <code>should_execute</code> (confiança ≥ 0.40, risco ≥
-        0.50).
+        <code>score_signal</code> + <code>should_execute</code> (confiança ≥ 0.40, risco ≥ 0.50).
       </p>
 
       <p className="sig__hint sig__hint--real">
@@ -230,7 +228,9 @@ export default function ScorePanel() {
               <div className="sig__top">
                 <Gauge value={composite} tone={tone} />
                 <div className="sig__verdict">
-                  <span className={`sig__stamp sig__stamp--${verdict === "EXECUTAR" ? "go" : "no"}`}>
+                  <span
+                    className={`sig__stamp sig__stamp--${verdict === "EXECUTAR" ? "go" : "no"}`}
+                  >
                     {verdict}
                   </span>
                   <div className="sig__metrics">

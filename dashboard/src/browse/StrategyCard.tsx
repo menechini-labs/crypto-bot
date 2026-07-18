@@ -1,6 +1,6 @@
-import type { Strategy } from "./types";
-import Sparkline from "./Sparkline";
 import { Link } from "react-router-dom";
+import Sparkline from "./Sparkline";
+import type { Strategy } from "./types";
 
 interface Props {
   strategy: Strategy;
@@ -33,7 +33,10 @@ export default function StrategyCard({ strategy }: Props) {
         <div className="kpis">
           <div>
             <small className="kpi-l">PnL</small>
-            <span className={pnlClass}>{(strategy.netProfitPct ?? 0) >= 0 ? "+" : ""}{strategy.netProfitPct}%</span>
+            <span className={pnlClass}>
+              {(strategy.netProfitPct ?? 0) >= 0 ? "+" : ""}
+              {strategy.netProfitPct}%
+            </span>
           </div>
           <div>
             <small className="kpi-l">Drawdown</small>
@@ -59,7 +62,12 @@ export default function StrategyCard({ strategy }: Props) {
           🔍 Analyze
         </Link>
         {strategy.forkUrl ? (
-          <a href={strategy.forkUrl} className="btn-secondary" target="_blank" rel="noopener noreferrer">
+          <a
+            href={strategy.forkUrl}
+            className="btn-secondary"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             Fork ↗
           </a>
         ) : (

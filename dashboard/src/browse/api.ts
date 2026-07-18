@@ -1,9 +1,4 @@
-import type {
-  Strategy,
-  BacktestParams,
-  BacktestReport,
-  AnalysisResult,
-} from "./types";
+import type { AnalysisResult, BacktestParams, BacktestReport, Strategy } from "./types";
 
 const API_BASE = "/api";
 
@@ -66,9 +61,7 @@ export async function fetchBacktestReport(
   return { report: resp.report, analysis: resp.analysis };
 }
 
-export async function triggerBacktestReflection(
-  id: string,
-): Promise<Record<string, unknown>> {
+export async function triggerBacktestReflection(id: string): Promise<Record<string, unknown>> {
   const resp = await post<{ status: string; reflection: Record<string, unknown> }>(
     `/backtest/${id}/reflection`,
     {},
@@ -76,9 +69,7 @@ export async function triggerBacktestReflection(
   return resp.reflection;
 }
 
-export async function fetchReflections(
-  limit = 10,
-): Promise<Record<string, unknown>[]> {
+export async function fetchReflections(limit = 10): Promise<Record<string, unknown>[]> {
   return request<{ status: string; reflections: Record<string, unknown>[] }>(
     "/reflections",
     new URLSearchParams({ limit: String(limit) }),
@@ -111,4 +102,3 @@ export async function setMode(mode: "demo" | "real"): Promise<{
 }> {
   return post<{ mode: string; real_active: boolean }>("/mode", { mode });
 }
-

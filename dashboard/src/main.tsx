@@ -1,9 +1,9 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Dashboard from "./Dashboard";
-import BacktestReport from "./browse/BacktestReport";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 import AnalyzePage from "./browse/AnalyzePage";
+import BacktestReport from "./browse/BacktestReport";
+import Dashboard from "./Dashboard";
 import "./index.css";
 
 /* wrapper that passes initialTab to Dashboard */

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { apiGet, apiPost, ApiError } from "./api";
+import { ApiError, apiGet, apiPost } from "./api";
 
 interface Position {
   id: string;
@@ -91,48 +91,107 @@ export default function TradeDesk({ mode }: { mode: "demo" | "real" }) {
         refresh();
       }
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : "erro ao enviar ordem");
+      setError(
+        e instanceof ApiError ? e.message : e instanceof Error ? e.message : "erro ao enviar ordem",
+      );
     }
   }
 
   return (
     <div className="trade-desk">
       <div className="trade-desk__head">
-        <h2>Trade Desk <span className="badge-warn">PAPER</span></h2>
-        <p className="muted">Simulação only — nenhuma ordem real. Fill a preço de mercado Binance.</p>
+        <h2>
+          Trade Desk <span className="badge-warn">PAPER</span>
+        </h2>
+        <p className="muted">
+          Simulação only — nenhuma ordem real. Fill a preço de mercado Binance.
+        </p>
       </div>
 
       <div className="trade-desk__panel">
         <div className="trade-desk__summary">
-          <div className="td-stat"><small>Caixa</small><span>${snap?.cash.toFixed(2) ?? "—"}</span></div>
-          <div className="td-stat"><small>Equity</small><span>${snap?.equity.toFixed(2) ?? "—"}</span></div>
-          <div className="td-stat"><small>Posições</small><span>{snap?.positions.length ?? 0}</span></div>
-          <div className="td-stat"><small>Ordens</small><span>{snap?.total_orders ?? 0}</span></div>
+          <div className="td-stat">
+            <small>Caixa</small>
+            <span>${snap?.cash.toFixed(2) ?? "—"}</span>
+          </div>
+          <div className="td-stat">
+            <small>Equity</small>
+            <span>${snap?.equity.toFixed(2) ?? "—"}</span>
+          </div>
+          <div className="td-stat">
+            <small>Posições</small>
+            <span>{snap?.positions.length ?? 0}</span>
+          </div>
+          <div className="td-stat">
+            <small>Ordens</small>
+            <span>{snap?.total_orders ?? 0}</span>
+          </div>
         </div>
 
         {snap?.exits && snap.exits.length > 0 && (
           <div className="trade-desk__exits">
             {snap.exits.map((x, i) => (
-              <span key={i} className="td-exit">⚡ {x.symbol} {x.reason}</span>
+              <span key={i} className="td-exit">
+                ⚡ {x.symbol} {x.reason}
+              </span>
             ))}
           </div>
         )}
 
         <form className="trade-desk__form" onSubmit={(e) => e.preventDefault()}>
-          <label><span>Símbolo</span><input value={symbol} onChange={(e) => setSymbol(e.target.value)} /></label>
-          <label><span>Qtd</span><input value={qty} onChange={(e) => setQty(e.target.value)} /></label>
-          <label><span>SL %</span><input value={sl} placeholder="ex: 0.05" onChange={(e) => setSl(e.target.value)} /></label>
-          <label><span>TP %</span><input value={tp} placeholder="ex: 0.10" onChange={(e) => setTp(e.target.value)} /></label>
-          <label><span>Trailing %</span><input value={trail} placeholder="ex: 0.03" onChange={(e) => setTrail(e.target.value)} /></label>
-          <label style={{ gridColumn: "1 / -1" }}><span>Motivo (audit)</span><input value={reason} placeholder="ex: cruzamento MA + RSI" onChange={(e) => setReason(e.target.value)} /></label>
-          <label style={{ gridColumn: "1 / -1" }}><span>Advisory (Pré-Trade)</span><input value={advisory} placeholder="ex: risk ok, exposição sob teto" onChange={(e) => setAdvisory(e.target.value)} /></label>
+          <label>
+            <span>Símbolo</span>
+            <input value={symbol} onChange={(e) => setSymbol(e.target.value)} />
+          </label>
+          <label>
+            <span>Qtd</span>
+            <input value={qty} onChange={(e) => setQty(e.target.value)} />
+          </label>
+          <label>
+            <span>SL %</span>
+            <input value={sl} placeholder="ex: 0.05" onChange={(e) => setSl(e.target.value)} />
+          </label>
+          <label>
+            <span>TP %</span>
+            <input value={tp} placeholder="ex: 0.10" onChange={(e) => setTp(e.target.value)} />
+          </label>
+          <label>
+            <span>Trailing %</span>
+            <input
+              value={trail}
+              placeholder="ex: 0.03"
+              onChange={(e) => setTrail(e.target.value)}
+            />
+          </label>
+          <label style={{ gridColumn: "1 / -1" }}>
+            <span>Motivo (audit)</span>
+            <input
+              value={reason}
+              placeholder="ex: cruzamento MA + RSI"
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </label>
+          <label style={{ gridColumn: "1 / -1" }}>
+            <span>Advisory (Pré-Trade)</span>
+            <input
+              value={advisory}
+              placeholder="ex: risk ok, exposição sob teto"
+              onChange={(e) => setAdvisory(e.target.value)}
+            />
+          </label>
           <div className="trade-desk__actions">
             {demo ? (
-              <p className="td-msg td-msg--warn">DEMO mode · execução desligada. Ative REAL no menu lateral.</p>
+              <p className="td-msg td-msg--warn">
+                DEMO mode · execução desligada. Ative REAL no menu lateral.
+              </p>
             ) : (
               <>
-                <button type="button" className="td-buy" onClick={() => submit("buy")}>BUY (paper)</button>
-                <button type="button" className="td-sell" onClick={() => submit("sell")}>SELL (paper)</button>
+                <button type="button" className="td-buy" onClick={() => submit("buy")}>
+                  BUY (paper)
+                </button>
+                <button type="button" className="td-sell" onClick={() => submit("sell")}>
+                  SELL (paper)
+                </button>
               </>
             )}
           </div>
@@ -143,22 +202,37 @@ export default function TradeDesk({ mode }: { mode: "demo" | "real" }) {
       </div>
 
       <div className="trade-desk__audit">
-        <h3>Auditoria Pré-Trade <span className="muted">(fail-closed trail)</span></h3>
+        <h3>
+          Auditoria Pré-Trade <span className="muted">(fail-closed trail)</span>
+        </h3>
         {snap?.max_daily_orders != null && (
           <div className="td-meter">
-            <small>Ordens hoje: {snap.day_orders ?? 0}/{snap.max_daily_orders} · Exposição máx: {((snap.max_exposure_pct ?? 0.95) * 100).toFixed(0)}%</small>
-            <div className="td-meter__bar"><span style={{ width: `${Math.min(100, ((snap.day_orders ?? 0) / (snap.max_daily_orders || 1)) * 100)}%` }} /></div>
+            <small>
+              Ordens hoje: {snap.day_orders ?? 0}/{snap.max_daily_orders} · Exposição máx:{" "}
+              {((snap.max_exposure_pct ?? 0.95) * 100).toFixed(0)}%
+            </small>
+            <div className="td-meter__bar">
+              <span
+                style={{
+                  width: `${Math.min(100, ((snap.day_orders ?? 0) / (snap.max_daily_orders || 1)) * 100)}%`,
+                }}
+              />
+            </div>
           </div>
         )}
         {!snap?.audit?.length && <p className="muted">Nenhuma ordem REAL registrada.</p>}
         <ul className="td-audit">
-          {snap?.audit?.slice().reverse().map((a, i) => (
-            <li key={i}>
-              <span className="td-audit__ts">{new Date(a.ts * 1000).toLocaleTimeString()}</span>
-              <b>{a.side.toUpperCase()}</b> {a.symbol} @ {a.price} · {a.qty}
-              <br /><span className="muted">adv: {a.advisory || "—"}</span>
-            </li>
-          ))}
+          {snap?.audit
+            ?.slice()
+            .reverse()
+            .map((a, i) => (
+              <li key={i}>
+                <span className="td-audit__ts">{new Date(a.ts * 1000).toLocaleTimeString()}</span>
+                <b>{a.side.toUpperCase()}</b> {a.symbol} @ {a.price} · {a.qty}
+                <br />
+                <span className="muted">adv: {a.advisory || "—"}</span>
+              </li>
+            ))}
         </ul>
       </div>
 
@@ -167,7 +241,17 @@ export default function TradeDesk({ mode }: { mode: "demo" | "real" }) {
         {!snap?.positions.length && <p className="muted">Nenhuma posição paper.</p>}
         <table className="td-table">
           <thead>
-            <tr><th>Símbolo</th><th>Lado</th><th>Qtd</th><th>Entrada</th><th>Mark</th><th>SL</th><th>TP</th><th>uPNL</th><th>%</th></tr>
+            <tr>
+              <th>Símbolo</th>
+              <th>Lado</th>
+              <th>Qtd</th>
+              <th>Entrada</th>
+              <th>Mark</th>
+              <th>SL</th>
+              <th>TP</th>
+              <th>uPNL</th>
+              <th>%</th>
+            </tr>
           </thead>
           <tbody>
             {snap?.positions.map((p) => (
@@ -180,7 +264,9 @@ export default function TradeDesk({ mode }: { mode: "demo" | "real" }) {
                 <td>{p.stop_loss ?? "—"}</td>
                 <td>{p.take_profit ?? "—"}</td>
                 <td className={p.unrealized_pnl >= 0 ? "pos" : "neg"}>{p.unrealized_pnl}</td>
-                <td className={p.unrealized_pnl_pct >= 0 ? "pos" : "neg"}>{p.unrealized_pnl_pct}%</td>
+                <td className={p.unrealized_pnl_pct >= 0 ? "pos" : "neg"}>
+                  {p.unrealized_pnl_pct}%
+                </td>
               </tr>
             ))}
           </tbody>

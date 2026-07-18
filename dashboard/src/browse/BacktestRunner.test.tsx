@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runBacktest } from "./api";
 import BacktestRunner from "./BacktestRunner";
-import type { BacktestReport, AnalysisResult, Trade } from "./types";
+import type { AnalysisResult, BacktestReport, Trade } from "./types";
 
 vi.mock("./api", async () => {
   const actual = await vi.importActual<typeof import("./api")>("./api");

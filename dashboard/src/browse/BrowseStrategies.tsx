@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { fetchStrategies, fetchExternalSources } from "./api";
+import { fetchExternalSources, fetchStrategies } from "./api";
 import BacktestRunner from "./BacktestRunner";
 import FiltersBar from "./FiltersBar";
 import StrategyCard from "./StrategyCard";
@@ -39,16 +39,16 @@ export default function BrowseStrategies() {
   useEffect(() => {
     refresh();
     const interval = setInterval(refresh, 30_000);
-    fetchExternalSources().then(s => setExtBrowse(s.browse)).catch(() => {}); // refresh a cada 30s
+    fetchExternalSources()
+      .then((s) => setExtBrowse(s.browse))
+      .catch(() => {}); // refresh a cada 30s
     return () => clearInterval(interval);
   }, []);
 
   const filtered = useMemo(() => {
     let list = all;
-    if (filters.symbol)
-      list = list.filter((s) => s.symbol === filters.symbol);
-    if (filters.timeframe)
-      list = list.filter((s) => s.timeframe === filters.timeframe);
+    if (filters.symbol) list = list.filter((s) => s.symbol === filters.symbol);
+    if (filters.timeframe) list = list.filter((s) => s.timeframe === filters.timeframe);
     if (filters.minPnl !== "" && filters.minPnl !== undefined) {
       const v = Number(filters.minPnl);
       if (!isNaN(v)) list = list.filter((s) => s.netProfitPct !== null && s.netProfitPct >= v);
@@ -68,7 +68,11 @@ export default function BrowseStrategies() {
   const clearFilters = () => setFilters(INIT_FILTERS);
 
   if (loading)
-    return <div className="loading" role="status">Carregando estratégias...</div>;
+    return (
+      <div className="loading" role="status">
+        Carregando estratégias...
+      </div>
+    );
   if (error)
     return (
       <div className="error" role="alert">
@@ -84,8 +88,12 @@ export default function BrowseStrategies() {
       <header className="browse-header">
         <h1 className="browse-title">Browse Estratégias</h1>
         <div className="browse-actions">
-          <button className="btn-secondary" onClick={refresh} title="Recarregar">⟳</button>
-          <Link to="/analyze" className="btn-primary">+ Novo Backtest</Link>
+          <button className="btn-secondary" onClick={refresh} title="Recarregar">
+            ⟳
+          </button>
+          <Link to="/analyze" className="btn-primary">
+            + Novo Backtest
+          </Link>
           {extBrowse && (
             <a href={extBrowse} className="btn-secondary" target="_blank" rel="noopener noreferrer">
               Browse Externo ↗

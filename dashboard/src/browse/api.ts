@@ -93,3 +93,22 @@ export async function fetchExternalSources(): Promise<{
   return request<{ backtest: string; browse: string }>("/external");
 }
 
+/* === Mode (DEMO / REAL) === */
+
+export interface ModeState {
+  mode: "demo" | "real";
+  real_available: boolean;
+  real_active: boolean;
+}
+
+export async function fetchMode(): Promise<ModeState> {
+  return request<ModeState>("/mode");
+}
+
+export async function setMode(mode: "demo" | "real"): Promise<{
+  mode: string;
+  real_active: boolean;
+}> {
+  return post<{ mode: string; real_active: boolean }>("/mode", { mode });
+}
+

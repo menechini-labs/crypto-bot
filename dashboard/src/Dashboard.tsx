@@ -8,6 +8,7 @@ import HealthPanel from "./HealthPanel";
 import AgentDesk from "./AgentDesk";
 import NewsFeed from "./NewsFeed";
 import TradeDesk from "./TradeDesk";
+import { fetchMode, setMode, type ModeState } from "./browse/api";
 import type { DashboardState, EquityPoint, PortfolioStats } from "./types";
 
 /* === helpers === */
@@ -172,8 +173,21 @@ function DashboardTab({ state, lastCycle }: { state: DashboardState; lastCycle: 
 export default function Dashboard() {
   const { state, lastCycle } = useEquity();
   const [tab, setTab] = useState<Tab>("dashboard");
-  const [mode] = useState<"paper" | "live">("paper"); // live locked — MVP paper-only
+  const [mode, setModeState] = useState<ModeState>({ mode: "demo", real_available: false, real_active: false });
   const [connected, setConnected] = useState<boolean | null>(null);
+  const [confirmReal, setConfirmReal] = useState(false);
+  const [modeError, setModeError] = useState<string | null>(null);
+
+  const loadMode = async () => {
+    try {
+      const m = await fetchMode();
+      setModeState(m);
+    } catch {
+      /* keep last known */
+    }
+  };
+
+  useEffect(() => { loadMode(); }, []);
 
   // Connection status probe
   useEffect(() => {
@@ -193,6 +207,35 @@ export default function Dashboard() {
       clearInterval(id);
     };
   }, []);
+
+  const requestReal = () => {
+    if (!mode.real_available) {
+      setModeError("REAL mode bloqueado: defina ALLOW_LIVE_TRADING=1 no servidor");
+      return;
+    }
+    setConfirmReal(true);
+  };
+
+  const confirmSwitchReal = async () => {
+    setConfirmReal(false);
+    setModeError(null);
+    try {
+      const m = await setMode("real");
+      setModeState((prev) => ({ ...prev, mode: m.mode as "demo" | "real", real_active: m.real_active }));
+    } catch (e) {
+      setModeError(e instanceof Error ? e.message : "falha ao ativar REAL");
+    }
+  };
+
+  const switchToDemo = async () => {
+    setModeError(null);
+    try {
+      const m = await setMode("demo");
+      setModeState((prev) => ({ ...prev, mode: m.mode as "demo" | "real", real_active: m.real_active }));
+    } catch (e) {
+      setModeError(e instanceof Error ? e.message : "falha ao ativar DEMO");
+    }
+  };
 
   const groups = Array.from(new Set(NAV.map((n) => n.group)));
 
@@ -228,9 +271,26 @@ export default function Dashboard() {
         </nav>
 
         <div className="sidebar__foot">
-          <div className={`mode-badge mode-badge--${mode}`}>
-            <span className="mode-badge__dot" /> {mode === "paper" ? "PAPER (locked)" : "LIVE"}
-          </div>
+          {mode.mode === "demo" ? (
+            <button
+              type="button"
+              className="mode-badge mode-badge--demo mode-badge--btn"
+              onClick={requestReal}
+              title="Ativar execução (REAL)"
+            >
+              <span className="mode-badge__dot" /> DEMO · ativar REAL
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="mode-badge mode-badge--real mode-badge--btn"
+              onClick={switchToDemo}
+              title="Voltar para DEMO (observação)"
+            >
+              <span className="mode-badge__dot" /> REAL · voltar DEMO
+            </button>
+          )}
+          {modeError && <p className="mode-error">{modeError}</p>}
           <div className={`conn-status conn-status--${connected === null ? "unknown" : connected ? "up" : "down"}`}>
             <span className="conn-status__dot" />
             {connected === null ? "conectando..." : connected ? "API online" : "API offline"}
@@ -238,12 +298,26 @@ export default function Dashboard() {
         </div>
       </aside>
 
+      {confirmReal && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Confirmar REAL mode">
+          <div className="modal">
+            <h3>Ativar REAL mode?</h3>
+            <p>REAL ativa execução paper a preço de mercado real da Binance. SL/TP e risk guard continuam ativos.</p>
+            <p className="muted">Nenhuma ordem real é enviada a nenhuma exchange.</p>
+            <div className="modal__actions">
+              <button type="button" className="btn-ghost" onClick={() => setConfirmReal(false)}>Cancelar</button>
+              <button type="button" className="btn-danger" onClick={confirmSwitchReal}>Ativar REAL</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="main">
         <header className="header">
           <div className="brand">
             <div className="brand__titles">
               <h1>Crypto Bot</h1>
-              <p>Paper trading · spot · sem risco real</p>
+              <p>{mode.mode === "demo" ? "DEMO · observação · sem execução" : "REAL · paper exec · preço live"}</p>
             </div>
           </div>
           <div className="status">
@@ -259,7 +333,7 @@ export default function Dashboard() {
         {tab === "health" && <HealthPanel />}
         {tab === "agents" && <AgentDesk />}
         {tab === "news" && <NewsFeed />}
-        {tab === "tradedesk" && <TradeDesk />}
+        {tab === "tradedesk" && <TradeDesk mode={mode.mode} />}
       </main>
     </div>
   );

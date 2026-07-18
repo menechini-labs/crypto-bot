@@ -12,6 +12,29 @@ import os
 import json
 import zipfile
 from datetime import UTC, datetime
+from pathlib import Path
+
+
+def _load_dotenv() -> None:
+    """Minimal .env loader (stdlib only). Sets os.environ from .env if present."""
+    root = Path(__file__).resolve().parent.parent
+    env_path = root / ".env"
+    if not env_path.exists():
+        return
+    try:
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key, val = key.strip(), val.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = val
+    except Exception:
+        pass
+
+
+_load_dotenv()
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
@@ -240,6 +263,33 @@ async def get_stats() -> dict[str, Any]:
 
 _BACKTEST_CACHE: dict[str, dict[str, Any]] = {}
 
+# ---------------------------------------------------------------------------
+# Mode state: DEMO (observation only) vs REAL (paper execution enabled)
+# ---------------------------------------------------------------------------
+# DEMO: no order execution. REAL: PaperEngine execution allowed.
+# REAL requires ALLOW_LIVE_TRADING=1 at process level to take effect.
+_ALLOW_LIVE = os.getenv("ALLOW_LIVE_TRADING") == "1"
+_MODE: str = (os.getenv("MODE") or "demo").lower()
+if _MODE not in ("demo", "real"):
+    _MODE = "demo"
+
+
+def _mode_is_real() -> bool:
+    """REAL active only if MODE=real AND ALLOW_LIVE_TRADING=1."""
+    return _MODE == "real" and _ALLOW_LIVE
+
+
+def _set_mode(new_mode: str) -> bool:
+    """Set runtime mode. Returns True if applied."""
+    global _MODE
+    new_mode = (new_mode or "").lower()
+    if new_mode not in ("demo", "real"):
+        return False
+    if new_mode == "real" and not _ALLOW_LIVE:
+        return False
+    _MODE = new_mode
+    return True
+
 
 def _bt_id(symbol: str, strategy: str, regime: str, seed: int) -> str:
     return f"{symbol.replace('/', '_')}_{strategy}_{regime}_{seed}"
@@ -451,11 +501,64 @@ async def health() -> dict[str, Any]:
         "status": "ok",
         "time": datetime.now(UTC).isoformat(),
         "version": app.version,
+        "mode": _MODE,
+        "mode_real": _mode_is_real(),
+        "allow_live_trading": _ALLOW_LIVE,
         "llm_enabled": llm_enabled,
         "registry_strategies": sorted(_registry_get_all().keys()),
         "scoring_available": importlib.util.find_spec("core.scoring") is not None,
         "indicators_available": importlib.util.find_spec("core.indicators") is not None,
     }
+
+
+@app.get("/api/mode")
+async def get_mode() -> dict[str, Any]:
+    """Current mode + whether REAL execution is possible."""
+    return {
+        "mode": _MODE,
+        "real_available": _ALLOW_LIVE,
+        "real_active": _mode_is_real(),
+    }
+
+@app.post("/api/mode")
+async def set_mode(payload: dict[str, Any]) -> dict[str, Any]:
+    """Switch mode. REAL requires ALLOW_LIVE_TRADING=1; rejected otherwise."""
+    new_mode = str(payload.get("mode", "")).lower()
+    if new_mode not in ("demo", "real"):
+        raise HTTPException(status_code=400, detail="mode deve ser 'demo' ou 'real'")
+    if new_mode == "real" and not _ALLOW_LIVE:
+        raise HTTPException(
+            status_code=403,
+            detail="REAL mode bloqueado: defina ALLOW_LIVE_TRADING=1 no ambiente",
+        )
+    if not _set_mode(new_mode):
+        raise HTTPException(status_code=400, detail="falha ao aplicar modo")
+    logger.info("mode alterado para %s", _MODE)
+    _persist_mode(_MODE)
+    return {"mode": _MODE, "real_active": _mode_is_real()}
+
+
+def _persist_mode(mode: str) -> None:
+    """Write MODE to .env if present (persists restart)."""
+    try:
+        root = Path(__file__).resolve().parent.parent
+        env_path = root / ".env"
+        if not env_path.exists():
+            return
+        lines = env_path.read_text(encoding="utf-8").splitlines()
+        out = []
+        replaced = False
+        for ln in lines:
+            if ln.strip().startswith("MODE="):
+                out.append(f"MODE={mode}")
+                replaced = True
+            else:
+                out.append(ln)
+        if not replaced:
+            out.append(f"MODE={mode}")
+        env_path.write_text("\n".join(out) + "\n", encoding="utf-8")
+    except Exception:
+        pass
 
 
 @app.get("/api/external")
@@ -721,7 +824,21 @@ async def api_news(
 
 @app.get("/api/positions")
 async def api_positions() -> dict[str, Any]:
-    """Paper positions snapshot + auto SL/TP/trailing check."""
+    """Paper positions snapshot + auto SL/TP/trailing check.
+
+    In DEMO mode, returns empty snapshot (no execution surface).
+    """
+    if not _mode_is_real():
+        return {
+            "cash": 0.0,
+            "equity": 0.0,
+            "positions": [],
+            "open_orders": 0,
+            "total_orders": 0,
+            "paper_only": True,
+            "demo": True,
+            "exits": [],
+        }
     eng = _paper_engine.get_engine()
     exits = eng.check_exits()
     snap = eng.snapshot()
@@ -732,6 +849,11 @@ async def api_positions() -> dict[str, Any]:
 @app.post("/api/orders")
 async def api_submit_order(payload: dict[str, Any]) -> dict[str, Any]:
     """Submit a PAPER order (buy/sell). Never touches real funds."""
+    if not _mode_is_real():
+        raise HTTPException(
+            status_code=403,
+            detail="DEMO mode: execucao desligada. Ative REAL mode para operar.",
+        )
     required = ("symbol", "side", "qty")
     if any(k not in payload for k in required):
         raise HTTPException(status_code=400, detail="symbol, side, qty obrigatorios")

@@ -21,9 +21,10 @@ interface Snapshot {
   total_orders: number;
   paper_only: boolean;
   exits: Array<{ symbol: string; reason: string }>;
+  demo?: boolean;
 }
 
-export default function TradeDesk() {
+export default function TradeDesk({ mode }: { mode: "demo" | "real" }) {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [symbol, setSymbol] = useState("BTCUSDT");
   const [qty, setQty] = useState("0.001");
@@ -32,6 +33,7 @@ export default function TradeDesk() {
   const [trail, setTrail] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const demo = mode === "demo";
 
   async function refresh() {
     try {
@@ -50,6 +52,7 @@ export default function TradeDesk() {
   }, []);
 
   async function submit(side: "buy" | "sell") {
+    if (demo) return;
     setMsg(null);
     setError(null);
     try {
@@ -107,8 +110,14 @@ export default function TradeDesk() {
           <label><span>TP %</span><input value={tp} placeholder="ex: 0.10" onChange={(e) => setTp(e.target.value)} /></label>
           <label><span>Trailing %</span><input value={trail} placeholder="ex: 0.03" onChange={(e) => setTrail(e.target.value)} /></label>
           <div className="trade-desk__actions">
-            <button type="button" className="td-buy" onClick={() => submit("buy")}>BUY (paper)</button>
-            <button type="button" className="td-sell" onClick={() => submit("sell")}>SELL (paper)</button>
+            {demo ? (
+              <p className="td-msg td-msg--warn">DEMO mode · execução desligada. Ative REAL no menu lateral.</p>
+            ) : (
+              <>
+                <button type="button" className="td-buy" onClick={() => submit("buy")}>BUY (paper)</button>
+                <button type="button" className="td-sell" onClick={() => submit("sell")}>SELL (paper)</button>
+              </>
+            )}
           </div>
         </form>
 

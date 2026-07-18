@@ -10,6 +10,7 @@ import logging
 import mimetypes
 import os
 import json
+import time
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -805,6 +806,82 @@ async def api_agents_cycle(team: str | None = None) -> dict[str, Any]:
             return _agent_desk.run_team(preset, closes if len(closes) >= 20 else None)
     cycle = _agent_desk.run_cycle(closes if len(closes) >= 20 else None)
     return cycle
+
+
+_AGENT_EXEC_HISTORY: list[dict] = []
+
+
+@app.post("/api/agents/execute")
+async def api_agents_execute(payload: dict[str, Any]) -> dict[str, Any]:
+    """Submit the Agent Desk decision as a paper order via PaperEngine.
+
+    Body: {"cycle_id": int, "symbol": str (default BTCUSDT), "team": str | None}
+    DEMO mode returns 403. REAL requires ALLOW_LIVE_TRADING=1.
+    """
+    if not _mode_is_real():
+        raise HTTPException(403, "execucao desligada no modo DEMO")
+    cycle_id = payload.get("cycle_id")
+    symbol = payload.get("symbol", "BTCUSDT")
+    team = payload.get("team")
+
+    # Idempotency: same cycle_id already executed?
+    for h in _AGENT_EXEC_HISTORY:
+        if h.get("cycle_id") == cycle_id:
+            return {"ok": False, "error": "cycle_id ja executado", "history": h}
+
+    closes = _cached_closes(symbol, "1h", 100)
+    if team:
+        from core.swarm_presets import get_preset
+        preset = get_preset(team)
+        if preset:
+            cycle = _agent_desk.run_team(preset, closes if len(closes) >= 20 else None)
+            cycle["team"] = team
+        else:
+            cycle = _agent_desk.run_cycle(closes if len(closes) >= 20 else None)
+    else:
+        cycle = _agent_desk.run_cycle(closes if len(closes) >= 20 else None)
+
+    decision = cycle.get("decision")
+    if not decision:
+        return {"ok": False, "error": "time sem DecisionCore — apenas analise"}
+    verdict = decision.get("verdict")
+    conf = decision.get("confidence", 0.0)
+    if verdict not in ("buy", "sell") or conf < 0.5:
+        return {"ok": False, "error": f"decisao {verdict} ignorada (conf={conf:.2f})"}
+
+    from core import paper_engine as _paper
+    engine = _paper.get_engine()
+    snap = engine.snapshot()
+    available = snap.get("available_cash") or snap.get("cash", 0.0)
+    qty = _agent_desk._compute_qty(symbol, conf, available)
+    if qty <= 0:
+        return {"ok": False, "error": "qty <= 0 (sem caixa ou preco?)"}
+    order = _paper.Order(
+        symbol=symbol, side=verdict, qty=qty,
+        sl_pct=0.02, tp_pct=0.05, trailing_pct=0.01,
+        reason=f"AgentDesk {verdict} (conf {conf:.2f})",
+        advisory=decision.get("reasoning", ""),
+    )
+    result = engine.submit(order)
+    entry = {
+        "cycle_id": cycle_id,
+        "symbol": symbol,
+        "verdict": verdict,
+        "confidence": conf,
+        "order_id": result.get("order", {}).get("id"),
+        "qty": qty,
+        "result": result,
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "team": team,
+    }
+    _AGENT_EXEC_HISTORY.append(entry)
+    return {"ok": bool(result.get("ok")), "execution": entry, "cycle": cycle}
+
+
+@app.get("/api/agents/history")
+async def api_agents_history() -> dict[str, Any]:
+    """List of agent-triggered order executions (cycle_id -> order_id -> fill)."""
+    return {"status": "ok", "count": len(_AGENT_EXEC_HISTORY), "history": _AGENT_EXEC_HISTORY}
 
 
 # ---------------------------------------------------------------------------

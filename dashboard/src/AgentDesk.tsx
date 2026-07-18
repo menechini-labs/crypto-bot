@@ -14,8 +14,10 @@ interface Cycle {
   cycle_id: number;
   timestamp: string;
   paper_only: boolean;
+  team?: string;
   agents: AgentRecord[];
-  decision: AgentRecord;
+  decision: AgentRecord | null;
+  execution?: { executed: boolean; reason?: string };
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -75,11 +77,26 @@ export default function AgentDesk() {
   const [preset, setPreset] = useState<string>("crypto_trading_desk");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<string>("demo");
+  const [executing, setExecuting] = useState(false);
+  const [execMsg, setExecMsg] = useState<string | null>(null);
 
   async function loadPresets() {
     try {
       const res = await fetch("/api/swarm-presets");
       if (res.ok) setPresets((await res.json()) as SwarmPreset[]);
+    } catch {
+      /* silencioso */
+    }
+  }
+
+  async function loadMode() {
+    try {
+      const res = await fetch("/api/mode");
+      if (res.ok) {
+        const m = await res.json();
+        setMode(m.mode === "real" ? "real" : "demo");
+      }
     } catch {
       /* silencioso */
     }
@@ -99,8 +116,34 @@ export default function AgentDesk() {
     }
   }
 
+  async function execute() {
+    if (!cycle) return;
+    setExecuting(true);
+    setExecMsg(null);
+    try {
+      const res = await fetch("/api/agents/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cycle_id: cycle.cycle_id, team: cycle.team ?? null }),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        const r = data.execution?.result ?? {};
+        setExecMsg(`✓ Ordem ${r.order?.side?.toUpperCase()} ${r.order?.qty} executada`);
+        load(); // refresh cycle
+      } else {
+        setExecMsg(`✗ ${data.error ?? "falha"}`);
+      }
+    } catch (e) {
+      setExecMsg(e instanceof Error ? e.message : "erro ao executar");
+    } finally {
+      setExecuting(false);
+    }
+  }
+
   useEffect(() => {
     loadPresets();
+    loadMode();
     load();
     const id = setInterval(load, 30_000);
     return () => clearInterval(id);
@@ -110,8 +153,10 @@ export default function AgentDesk() {
   if (!cycle) return <div className="loading">Carregando Agent Desk…</div>;
 
   const dec = cycle.decision;
+  const isReal = mode === "real";
+  const canExecute = isReal && dec && (dec.verdict === "buy" || dec.verdict === "sell") && dec.confidence >= 0.5;
   const decTone =
-    dec.verdict === "buy" ? "ok" : dec.verdict === "sell" ? "rej" : "warn";
+    dec?.verdict === "buy" ? "ok" : dec?.verdict === "sell" ? "rej" : "warn";
 
   return (
     <div className="agent-desk">
@@ -120,12 +165,13 @@ export default function AgentDesk() {
           <h2>Agent Desk</h2>
           <p className="muted">
             Ciclo #{cycle.cycle_id} · {cycle.timestamp} · {cycle.paper_only ? "paper-only" : "live"}
+            {cycle.team ? ` · time: ${cycle.team}` : ""}
           </p>
         </div>
         <div className={`agent-desk__decision agent-desk__decision--${decTone}`}>
           <span className="agent-desk__decision-label">DECISÃO</span>
-          <span className="agent-desk__decision-verdict">{dec.verdict.toUpperCase()}</span>
-          <span className="agent-desk__decision-conf">conf {dec.confidence.toFixed(2)}</span>
+          <span className="agent-desk__decision-verdict">{dec?.verdict.toUpperCase() ?? "—"}</span>
+          <span className="agent-desk__decision-conf">conf {dec?.confidence.toFixed(2) ?? "0.00"}</span>
         </div>
         <button type="button" className="sig__real" onClick={load} disabled={loading}>
           ⟳ Rodar ciclo
@@ -150,11 +196,37 @@ export default function AgentDesk() {
         </span>
       </div>
 
-      <div className="agent-desk__grid">
-        {cycle.agents.map((a) => (
-          <AgentCard key={a.name} a={a} />
-        ))}
+      <div className="agent-desk__exec">
+        {isReal ? (
+          <button
+            type="button"
+            className="btn btn--execute"
+            onClick={execute}
+            disabled={!canExecute || executing}
+            title={canExecute ? "Executar ordem via PaperEngine" : "Apenas REAL + buy/sell conf>=0.5"}
+          >
+            {executing ? "Executando…" : "⚡ Executar ordem"}
+          </button>
+        ) : (
+          <span className="badge badge--warn">DEMO — sem execução</span>
+        )}
+        {execMsg && <span className="agent-desk__exec-msg">{execMsg}</span>}
+        {isReal && !canExecute && (
+          <span className="muted" style={{ fontSize: 11 }}>
+            Execução requer decisão buy/sell com conf ≥ 0.5
+          </span>
+        )}
       </div>
+
+      {cycle.agents.length > 0 ? (
+        <div className="agent-desk__grid">
+          {cycle.agents.map((a) => (
+            <AgentCard key={a.name} a={a} />
+          ))}
+        </div>
+      ) : (
+        <p className="muted">Time sem agentes (apenas análise).</p>
+      )}
     </div>
   );
 }

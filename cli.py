@@ -41,6 +41,38 @@ def _signal_for(strategy: str, closes: list[float], grid_levels, has_position: b
     from core.strategy import decide
     return decide(closes)
 
+def run_cycle_with_agents(cfg: dict) -> None:
+    """Run a single Agent Desk cycle and submit order via PaperEngine (REAL mode)."""
+    from core import agent_desk as _ad
+    from core import paper_engine as _pe
+    symbol = cfg["symbols"][0] if cfg.get("symbols") else "BTCUSDT"
+    closes = _ad.scoring._cached_closes(symbol, "1h", 100) if hasattr(_ad.scoring, "_cached_closes") else []
+    cycle = _ad.run_cycle(closes if len(closes) >= 20 else None)
+    decision = cycle["decision"]
+    verdict = decision["verdict"]
+    conf = decision["confidence"]
+    print(f"AgentDesk: {verdict} @ {conf:.2f}")
+    if verdict not in ("buy", "sell") or conf < 0.5:
+        print(f"  -> sem execucao (decisao {verdict}, conf {conf:.2f})")
+        return
+    engine = _pe.get_engine()
+    snap = engine.snapshot()
+    available = snap.get("available_cash") or snap.get("cash", 0.0)
+    qty = _ad._compute_qty(symbol, conf, available)
+    if qty <= 0:
+        print("  -> qty <= 0 (sem caixa?)")
+        return
+    order = _pe.Order(
+        symbol=symbol, side=verdict, qty=qty,
+        sl_pct=0.02, tp_pct=0.05, trailing_pct=0.01,
+        reason=f"AgentDesk {verdict} (conf {conf:.2f})",
+        advisory=decision.get("reasoning", ""),
+    )
+    result = engine.submit(order)
+    if result.get("ok"):
+        print(f"  -> ORDEM {verdict.upper()} {qty:.6f} {symbol} FILLED")
+    else:
+        print(f"  -> REJEITADA: {result.get('error')}")
 
 def run_cycle(cfg: dict, wallet: PaperWallet | None = None) -> PaperWallet:
     """Executa um ciclo de decisao para todos os simbolos.
@@ -48,6 +80,13 @@ def run_cycle(cfg: dict, wallet: PaperWallet | None = None) -> PaperWallet:
     Em caso de falha de rede (market data), apenas loga e segue.
     Retorna o wallet atualizado (cria um novo se nao fornecido).
     """
+    # Agent Desk mode: bypass wallet entirely, use PaperEngine.
+    if cfg.get("strategy") == "agent_desk":
+        run_cycle_with_agents(cfg)
+        wallet = wallet or PaperWallet(
+            initial_cash=cfg["initial_cash_usdt"], fee_pct=cfg["fee_pct"]
+        )
+        return wallet
     strategy = cfg.get("strategy", STRATEGY_DEFAULT)
     wallet = wallet or PaperWallet(
         initial_cash=cfg["initial_cash_usdt"], fee_pct=cfg["fee_pct"]
@@ -143,7 +182,7 @@ def main():
     ap = argparse.ArgumentParser(description="Paper trading bot (spot, sem risco real)")
     ap.add_argument("--mode", choices=["once", "continuous", "report", "dashboard"], default="once")
     ap.add_argument("--interval", type=int, default=60, help="segundos entre ciclos")
-    ap.add_argument("--strategy", choices=["grid", "grid_dynamic", "combined", "default"], default=None,
+    ap.add_argument("--strategy", choices=["grid", "grid_dynamic", "combined", "default", "agent_desk"], default=None,
                     help="estrategia (override do config)")
     args = ap.parse_args()
 

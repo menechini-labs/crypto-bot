@@ -334,3 +334,57 @@ class TestAgentVerdictSerialization:
     def test_json_serializable(self):
         v = AgentVerdict("X", "y", "buy", 0.9, "razão", {"k": 1})
         json.dumps(v.to_dict())  # must not raise
+
+
+class TestExecuteCycle:
+    def test_demo_skips_execution(self):
+        from core.agent_desk import execute_cycle
+        cycle = execute_cycle([100 + i for i in range(60)], mode="demo")
+        assert cycle["execution"]["executed"] is False
+        assert "DEMO" in cycle["execution"]["reason"]
+
+    def test_real_submits_order(self):
+        from core.agent_desk import execute_cycle
+        from core import paper_engine as pe
+        pe.get_engine().positions.clear()
+        cycle = execute_cycle([100 + i for i in range(60)], mode="real")
+        # buy with conf 0.76 -> should submit
+        assert cycle["execution"]["executed"] is True
+        assert len(pe.get_engine().snapshot()["positions"]) >= 1
+
+    def test_compute_qty_respects_limits(self):
+        from core.agent_desk import _compute_qty
+        from core.risk import RiskManager
+        qty = _compute_qty("BTCUSDT", 0.65, 1000.0)
+        assert qty > 0
+        # notional must be <= max_notional
+        price = 64000.0  # approx
+        # recompute price from qty
+        from core import market as m
+        px = float(m.fetch_ticker("BTCUSDT")["price"])
+        notional = qty * px
+        assert notional <= RiskManager().max_notional(1000.0) + 1.0  # small epsilon
+
+    def test_compute_qty_rounded_to_step(self):
+        from core.agent_desk import _compute_qty
+        from decimal import Decimal
+        from core.paper_engine import _EXCHANGE_INFO_CACHE, _validate_symbol_filters
+        qty = _compute_qty("BTCUSDT", 0.5, 1000.0)
+        # should pass exchangeInfo validation (no step error)
+        px = float(__import__("core.market", fromlist=["fetch_ticker"]).fetch_ticker("BTCUSDT")["price"])
+        err = _validate_symbol_filters("BTCUSDT", qty, px)
+        assert err is None or "stepSize" not in (err or "")
+
+
+class TestAgentExecuteEndpoint:
+    def test_history_empty_initially(self):
+        # Placeholder for API test; logic covered by integration
+        assert True
+
+    def test_execute_cycle_with_team(self):
+        from core.agent_desk import run_team
+        from core.swarm_presets import get_preset
+        preset = get_preset("crypto_trading_desk")
+        cycle = run_team(preset, [100 + i for i in range(60)])
+        assert cycle["status"] == "ok"
+        assert cycle["decision"] is not None

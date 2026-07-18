@@ -247,3 +247,105 @@ def run_cycle(closes: Optional[List[float]] = None) -> dict:
         "agents": [a.to_dict() for a in agents],
         "decision": core.to_dict(),
     }
+
+
+def _should_execute_decision(decision: AgentVerdict) -> bool:
+    """Only buy/sell with confidence >= 0.5 get executed (hold is skipped)."""
+    return decision.verdict in ("buy", "sell") and decision.confidence >= 0.5
+
+
+def _compute_qty(symbol: str, confidence: float, available_cash: float) -> float:
+    """qty = available_cash * confidence / last_price, rounded to LOT_SIZE stepSize."""
+    try:
+        from core import market as _mkt
+        price = float(_mkt.fetch_ticker(symbol)["price"])
+    except Exception:
+        price = 0.0
+    if price <= 0:
+        return 0.0
+    notional = available_cash * confidence
+    qty = notional / price
+    # respect RiskManager max_notional (round down)
+    try:
+        from core.risk import RiskManager
+        max_not = RiskManager().max_notional(available_cash)
+        if notional > max_not:
+            notional = max_not * 0.999
+            qty = notional / price
+    except Exception:
+        pass
+    # round to 6 decimals first
+    qty = float(f"{qty:.6f}")
+    # enforce minQty + stepSize from exchangeInfo
+    try:
+        from core.paper_engine import _EXCHANGE_INFO_CACHE, _validate_symbol_filters
+        sym = symbol.upper()
+        info = _EXCHANGE_INFO_CACHE.get(sym)
+        if info is None:
+            try:
+                data = _mkt.fetch_exchange_info(sym)
+                filt = {f.get("filterType"): f for f in data.get("filters", [])}
+                info = filt
+                _EXCHANGE_INFO_CACHE[sym] = filt
+            except Exception:
+                info = {}
+        lot = info.get("LOT_SIZE") if info else None
+        if lot:
+            min_qty = float(lot.get("minQty", 0))
+            step = float(lot.get("stepSize", 0))
+            if qty < min_qty:
+                qty = min_qty
+            if step > 0:
+                from decimal import Decimal
+                qty = float((Decimal(str(qty)) / Decimal(str(step))).to_integral_value() * Decimal(str(step)))
+                qty = float(f"{qty:.6f}")
+    except Exception:
+        pass
+    return qty
+
+
+def execute_cycle(closes: Optional[List[float]] = None, symbol: str = "BTCUSDT",
+                  mode: str = "demo") -> dict:
+    """Run a cycle and submit the decision to PaperEngine if REAL mode.
+
+    Returns the cycle dict plus an `execution` field with the result.
+    In DEMO mode, execution is skipped (paper_only decision only).
+    """
+    cycle = run_cycle(closes)
+    decision = cycle["decision"]
+    verdict = decision["verdict"] if isinstance(decision, dict) else decision.verdict
+    conf = decision["confidence"] if isinstance(decision, dict) else decision.confidence
+
+    if mode != "real" or not _should_execute_decision(
+        AgentVerdict(decision["name"], decision["role"], decision["verdict"],
+                     decision["confidence"], decision["reasoning"], decision.get("metrics", {}))
+    ):
+        cycle["execution"] = {
+            "executed": False,
+            "reason": "DEMO mode" if mode != "real" else f"decisao {verdict} ignorada (conf={conf:.2f})",
+        }
+        return cycle
+
+    # REAL mode: submit order
+    from core import paper_engine as _paper
+    engine = _paper.get_engine()
+    snap = engine.snapshot()
+    available = snap.get("available_cash", 0.0)
+    qty = _compute_qty(symbol, conf, available)
+    if qty <= 0:
+        cycle["execution"] = {"executed": False, "reason": "qty calculado <= 0 (sem caixa ou preco?)"}
+        return cycle
+    order = _paper.Order(
+        symbol=symbol, side=verdict, qty=qty,
+        sl_pct=0.02, tp_pct=0.05, trailing_pct=0.01,
+        reason=f"AgentDesk {verdict} (conf {conf:.2f})",
+        advisory=decision.get("reasoning", ""),
+    )
+    result = engine.submit(order)
+    cycle["execution"] = {
+        "executed": bool(result.get("ok")),
+        "order_id": result.get("order", {}).get("id"),
+        "result": result,
+        "qty": qty,
+    }
+    return cycle

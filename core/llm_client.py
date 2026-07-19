@@ -13,8 +13,25 @@ import urllib.error
 import urllib.request
 
 from core.credential_store import CredentialStore
+from core.providers import get_provider_class, list_providers as _list_providers, LLMProvider
 
 log = logging.getLogger(__name__)
+
+# Provider registry wrapper
+_PROVIDER_INSTANCES: dict[str, LLMProvider] = {}
+
+def register_provider(name: str, instance: LLMProvider):
+    _PROVIDER_INSTANCES[name] = instance
+
+def get_provider(name: str, **kwargs) -> LLMProvider:
+    if name not in _PROVIDER_INSTANCES:
+        cls = get_provider_class(name)
+        instance = cls(**kwargs)
+        _PROVIDER_INSTANCES[name] = instance
+    return _PROVIDER_INSTANCES[name]
+
+def list_providers() -> list[str]:
+    return _list_providers()
 
 # Lazy-initialized credential store
 _llm_cred_store: CredentialStore | None = None
@@ -82,41 +99,27 @@ def model() -> str:
 
 
 def chat(prompt: str, max_tokens: int = 256, temperature: float = 0.3) -> str:
-    """POST prompt to LLM chat endpoint. Returns raw lowercase content."""
+    """POST prompt to LLM chat endpoint using provider registry with fallback."""
     if not is_enabled():
         raise RuntimeError('LLM disabled (ENABLE_LLM=0)')
-    key = api_key()
-    if not key:
-        raise ValueError('LLM_API_KEY not configured')
 
-    headers = {
-        'Authorization': f'Bearer {key}',
-        'Content-Type': 'application/json',
-    }
-    payload = {
-        'model': model(),
-        'messages': [{'role': 'user', 'content': prompt}],
-        'max_tokens': max_tokens,
-        'temperature': temperature,
-    }
-    req = urllib.request.Request(
-        base_url().rstrip('/') + '/chat/completions',
-        data=json.dumps(payload).encode(),
-        headers=headers,
-        method='POST',
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            raw = resp.read().decode()
-            # take first JSON object (handle trailing content from some models)
-            idx = raw.rfind('}')
-            if idx > 0:
-                raw = raw[: idx + 1]
-            data = json.loads(raw)
-            return data['choices'][0]['message']['content'].strip().lower()
-    except urllib.error.HTTPError as e:
-        log.exception('LLM HTTP error %s: %s', e.code, e.read().decode())
-        raise
-    except Exception:
-        log.exception('LLM request failed')
-        raise
+    fallback_order_str = os.getenv('LLM_FALLBACK_ORDER', 'openai')
+    fallback_order = [name.strip() for name in fallback_order_str.split(',') if name.strip()]
+
+    last_error: Exception | None = None
+    for name in fallback_order:
+        try:
+            provider = get_provider(name)
+            response = provider.generate(
+                prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            if len(fallback_order) > 1:
+                log.info('Used provider: %s (fallback chain: %s)', name, fallback_order_str)
+            return response
+        except Exception as e:
+            log.warning('Provider %s failed: %s', name, e)
+            last_error = e
+
+    raise last_error or RuntimeError('no LLM providers available')

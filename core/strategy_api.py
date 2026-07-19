@@ -1196,55 +1196,24 @@ _AGENT_LOOP_CFG: dict[str, Any] = {
 
 
 def _agent_loop_worker() -> None:
-    """Background worker: runs agent_desk cycles until stop event."""
+    """Background worker: runs agent cycles for ALL active coins concurrently."""
     try:
-        from core import agent_desk as _ad
+        from core import agent_manager as _am
         from core import paper_engine as _pe
-        from core.market import fetch_ohlcv
 
         while not _AGENT_LOOP_STOP.is_set():
             try:
-                symbol = _AGENT_LOOP_TEAM_SYMBOL if _AGENT_LOOP_TEAM_SYMBOL else 'BTCUSDT'
-                cfg = _AGENT_LOOP_CFG
-                candles = fetch_ohlcv(symbol, '1h', 100)
-                closes = [c['close'] for c in candles]
-                cycle = _ad.run_cycle(closes if len(closes) >= 20 else None)
-                decision = cycle['decision']
-                verdict, conf = decision['verdict'], decision['confidence']
-                if verdict in ('buy', 'sell') and conf >= 0.5:
-                    engine = _pe.get_engine()
-                    if not cfg.get('auto_trade', True):
-                        logging.info(
-                            'agent_loop analise-only (%s conf %.2f) -- auto_trade off',
-                            verdict,
-                            conf,
-                        )
+                mode = _MODE
+                results = asyncio.run(_am.run_all_cycles(mode=mode, timeout=30.0))
+                for r in results:
+                    sym = r.get('symbol', '?')
+                    exec_info = r.get('execution', {})
+                    if exec_info.get('executed'):
+                        logging.info('agent_loop %s: executed, order=%s', sym, exec_info.get('order_id'))
                     else:
-                        snap = engine.snapshot()
-                        avail = snap.get('available_cash', snap.get('cash', 0.0))
-                        qty = _ad._compute_qty(symbol, conf, avail)
-                        if qty > 0:
-                            # Meta (target_price) vira tp_pct absoluto (CAP-5)
-                            tp_pct = cfg['tp_pct']
-                            target_price = cfg.get('target_price')
-                            if target_price:
-                                last = closes[-1] if closes else 0.0
-                                if last > 0:
-                                    tp_pct = float(target_price) / last - 1.0
-                            # Lock stop: sem SL duro, so sai por meta (CAP-4)
-                            sl_pct = 0.0 if cfg.get('lock_stop') else cfg['sl_pct']
-                            order = _pe.Order(
-                                symbol=symbol,
-                                side=verdict,
-                                qty=qty,
-                                sl_pct=sl_pct,
-                                tp_pct=tp_pct,
-                                trailing_pct=cfg['trailing_pct'],
-                                reason=f'AgentDesk {verdict} (conf {conf:.2f})',
-                                advisory=decision.get('reasoning', ''),
-                            )
-                            res = engine.submit(order)
-                            logging.info('agent_loop %s %s -> ok=%s', verdict, qty, res.get('ok'))
+                        reason = exec_info.get('reason', 'no-decision')
+                        if reason not in ('no decision', 'DEMO mode'):
+                            logging.info('agent_loop %s: %s', sym, reason)
             except Exception:
                 logging.exception('agent_loop error')
             _AGENT_LOOP_STOP.wait(_AGENT_LOOP_INTERVAL)
@@ -1255,6 +1224,103 @@ def _agent_loop_worker() -> None:
 _AGENT_LOOP_TEAM_SYMBOL = 'BTCUSDT'
 # Handle opcional do motor 1m ativo (day-trade templates)
 _AGENT_LOOP_1M_ENGINE: dict | None = None
+
+
+# ---------------------------------------------------------------------------
+# Per-coin endpoints (Epics 2+3)
+# ---------------------------------------------------------------------------
+
+
+@app.get('/api/coins')
+async def api_coins_list() -> dict[str, Any]:
+    """List active coins + per-coin configs."""
+    from core.coin_manager import list_coin_configs, get_active_coins
+    return {
+        'coins': get_active_coins(),
+        'configs': list_coin_configs(),
+    }
+
+
+@app.post('/api/coins')
+async def api_coins_set(payload: dict[str, Any]) -> dict[str, bool]:
+    """Set active coins list."""
+    from core.coin_manager import set_active_coins
+    coins = [c.strip().upper() for c in payload.get('coins', []) if c.strip()]
+    if not coins:
+        raise HTTPException(status_code=400, detail='need at least one coin')
+    set_active_coins(coins)
+    return {'ok': True}
+
+
+@app.get('/api/coins/{symbol}')
+async def api_coin_detail(symbol: str) -> dict[str, Any]:
+    """Get coin detail: config + last cycle."""
+    from core.coin_manager import get_coin_config
+    from core.agent_manager import get_last_cycle
+    sym = symbol.upper()
+    cfg = get_coin_config(sym)
+    cycle = get_last_cycle(sym)
+    return {
+        'symbol': sym,
+        'config': cfg,
+        'last_cycle': cycle,
+    }
+
+
+@app.get('/api/coins/{symbol}/cycle')
+async def api_coin_last_cycle(symbol: str) -> dict[str, Any]:
+    """Last cached cycle for a coin."""
+    from core.agent_manager import get_last_cycle
+    sym = symbol.upper()
+    cycle = get_last_cycle(sym)
+    if cycle is None:
+        return {'status': 'no_data', 'symbol': sym}
+    return cycle
+
+
+@app.post('/api/coins/cycle')
+async def api_coins_run_cycle(payload: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Run agent cycles for all active coins concurrently."""
+    from core.agent_manager import run_all_cycles
+    mode = (payload or {}).get('mode', _MODE)
+    timeout = float((payload or {}).get('timeout', 30.0))
+    results = await run_all_cycles(mode=mode, timeout=timeout)
+    return results
+
+
+@app.post('/api/coins/{symbol}/cycle')
+async def api_coin_run_cycle(symbol: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Run one agent cycle for a specific coin."""
+    from core.agent_manager import run_single_coin
+    sym = symbol.upper()
+    mode = (payload or {}).get('mode', _MODE)
+    timeout = float((payload or {}).get('timeout', 30.0))
+    return await run_single_coin(sym, mode=mode, timeout=timeout)
+
+
+@app.get('/api/coins/{symbol}/config')
+async def api_coin_config_get(symbol: str) -> dict[str, Any]:
+    """Per-coin risk config."""
+    from core.coin_manager import get_coin_config
+    return get_coin_config(symbol.upper())
+
+
+@app.patch('/api/coins/{symbol}/config')
+async def api_coin_config_set(symbol: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Update per-coin risk config (SL%, TP%, trailing, auto_trade)."""
+    from core.coin_manager import set_coin_config
+    sym = symbol.upper()
+    # Validation
+    for k in ('sl_pct', 'tp_pct', 'trailing_pct'):
+        if k in payload:
+            v = payload[k]
+            if not isinstance(v, (int, float)) or v < 0 or v > 1:
+                raise HTTPException(400, f'{k} must be 0.0-1.0')
+    if 'auto_trade' in payload and not isinstance(payload['auto_trade'], bool):
+        raise HTTPException(400, 'auto_trade must be bool')
+    set_coin_config(sym, payload)
+    return get_coin_config(sym)
+
 
 
 def _agent_loop_1m_on_signal(sig: dict, ctx: dict) -> None:

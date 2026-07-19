@@ -21,6 +21,8 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
+from core.credential_store import CredentialStore
+
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://ai4trade.ai/api"
@@ -28,6 +30,16 @@ CREDENTIALS_PATH = os.path.join(
     os.path.dirname(os.path.dirname(__file__)),
     ".ai-trader-credentials.json",
 )
+
+# Lazy-initialized credential store singleton for this module
+_cred_store_instance: CredentialStore | None = None
+
+
+def _get_cred_store() -> CredentialStore:
+    global _cred_store_instance
+    if _cred_store_instance is None:
+        _cred_store_instance = CredentialStore()
+    return _cred_store_instance
 
 
 @dataclass
@@ -117,22 +129,51 @@ class AiTraderHeartbeat:
 
 
 def load_credentials() -> dict:
-    """Load saved credentials from disk."""
+    """Load saved credentials from disk.
+    
+    Prefers encrypted credential store if available.
+    Falls back to plaintext JSON for backward compat (migration path).
+    """
+    cred_store = _get_cred_store()
+    if cred_store.exists():
+        try:
+            return {k: cred_store.get(k) for k in cred_store.keys()}
+        except Exception as e:
+            logger.warning("Failed to load from encrypted store: %s", e)
+            # fall through to plaintext fallback
+    
     if not os.path.exists(CREDENTIALS_PATH):
         return {}
     try:
         with open(CREDENTIALS_PATH) as f:
-            return json.load(f)
+            data = json.load(f)
+        # Migrate to encrypted store on first plaintext read
+        try:
+            cred_store.migrate_from_plaintext(CREDENTIALS_PATH)
+            logger.info("Migrated plaintext credentials to encrypted store")
+        except Exception as e:
+            logger.warning("Credential migration failed (will retry): %s", e)
+        return data
     except Exception as e:
         logger.warning("Failed to load AI-Trader credentials: %s", e)
         return {}
 
 
 def save_credentials(data: dict) -> None:
-    """Save credentials to disk."""
-    with open(CREDENTIALS_PATH, "w") as f:
-        json.dump(data, f, indent=2, default=str)
-    logger.info("AI-Trader credentials saved to %s", CREDENTIALS_PATH)
+    """Save credentials to encrypted store.
+    
+    Falls back to plaintext JSON if encrypted store unavailable (backward compat).
+    """
+    cred_store = _get_cred_store()
+    try:
+        for k, v in data.items():
+            cred_store.set(k, str(v))
+        logger.info("AI-Trader credentials saved to encrypted store")
+    except Exception as e:
+        logger.warning("Failed to save to encrypted store, falling back: %s", e)
+        with open(CREDENTIALS_PATH, "w") as f:
+            json.dump(data, f, indent=2, default=str)
+        logger.info("AI-Trader credentials saved to %s", CREDENTIALS_PATH)
 
 
 class AiTraderClient:

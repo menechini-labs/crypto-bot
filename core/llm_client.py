@@ -12,7 +12,19 @@ import os
 import urllib.error
 import urllib.request
 
+from core.credential_store import CredentialStore
+
 log = logging.getLogger(__name__)
+
+# Lazy-initialized credential store
+_llm_cred_store: CredentialStore | None = None
+
+
+def _get_llm_cred_store() -> CredentialStore:
+    global _llm_cred_store
+    if _llm_cred_store is None:
+        _llm_cred_store = CredentialStore()
+    return _llm_cred_store
 
 
 def _load_dotenv(path: str | None = None) -> None:
@@ -49,6 +61,13 @@ def is_enabled() -> bool:
 
 def api_key() -> str:
     _load_dotenv()
+    # Try encrypted store first, fall back to env var for backward compat
+    try:
+        store = _get_llm_cred_store()
+        if store.exists():
+            return store.get('llm_api_key')
+    except Exception:
+        pass
     return os.getenv('LLM_API_KEY', '')
 
 

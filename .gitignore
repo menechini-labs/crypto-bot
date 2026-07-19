@@ -13,6 +13,10 @@ venv/
 *.secret
 config/secrets.yaml
 
+# Credential store keys / encrypted files
+*.credentials.enc
+*.credential-store.key
+
 # Logs e dados de runtime
 logs/
 data/

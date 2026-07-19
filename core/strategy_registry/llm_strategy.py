@@ -6,6 +6,7 @@ import os
 import random
 from typing import Any
 
+from ..credential_store import CredentialStore
 from ..scoring import explain_score, score_signal, should_execute
 from .base import BaseStrategy
 from .prompts import get_prompt
@@ -19,6 +20,13 @@ def _is_enabled() -> bool:
 
 
 def _api_key() -> str:
+    # Try encrypted store first, fall back to env var for backward compat
+    try:
+        store = CredentialStore()
+        if store.exists():
+            return store.get('llm_api_key')
+    except Exception:
+        pass
     return os.getenv('LLM_API_KEY', '')
 
 

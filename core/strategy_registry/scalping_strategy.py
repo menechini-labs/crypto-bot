@@ -54,7 +54,7 @@ class ScalpingStrategy(BaseStrategy):
             not has_position
             and (v is None or price > v)
             and (r is None or r < 40)
-            and (st.get('k', 50) > st.get('d', 50))
+            and (st.get('k') is not None and st.get('d') is not None and st['k'] > st['d'])
         ):
             return {
                 'side': 'buy',

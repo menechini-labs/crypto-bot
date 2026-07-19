@@ -9,6 +9,7 @@ import EquityChart from "./EquityChart";
 import HealthPanel from "./HealthPanel";
 import NewsFeed from "./NewsFeed";
 import ScorePanel from "./ScorePanel";
+import PipelineView from "./PipelineView";
 import { PanelSkeleton, StatCardSkeleton } from "./Skeleton";
 import StatCard from "./StatCard";
 import TradeDesk from "./TradeDesk";
@@ -40,6 +41,7 @@ function computeStats(data: EquityPoint[]): PortfolioStats {
 
 type Tab =
   | "dashboard"
+  | "pipeline"
   | "browse"
   | "scoring"
   | "analyze"
@@ -47,6 +49,7 @@ type Tab =
   | "agents"
   | "news"
   | "tradedesk"
+  | "pipeline"
   | "events";
 
 interface NavItem {
@@ -58,6 +61,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { id: "dashboard", label: "Dashboard", icon: "◧", group: "Overview" },
+  { id: "pipeline", label: "Pipeline", icon: "⇄", group: "Overview" },
   { id: "browse", label: "Browse", icon: "⌕", group: "Overview" },
   { id: "scoring", label: "Scoring", icon: "✦", group: "Markets" },
   { id: "analyze", label: "Analyze", icon: "◎", group: "Markets" },
@@ -409,6 +413,7 @@ export default function Dashboard({ initialTab }: { initialTab?: Tab }) {
         </header>
 
         {tab === "dashboard" && <DashboardTab state={state} lastCycle={lastCycle} />}
+        {tab === "pipeline" && <PipelineView />}
         {tab === "browse" && <BrowseStrategies />}
         {tab === "scoring" && <ScorePanel />}
         {tab === "analyze" && <AnalyzePage />}

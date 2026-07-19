@@ -1568,6 +1568,176 @@ async def spa_fallback(full_path: str):
 
 
 # ---------------------------------------------------------------------------
+# Pipeline endpoint (events → agents → score → guard → trade → backtest)
+# ---------------------------------------------------------------------------
+
+_PIPELINE_EVENT_SNAPSHOT: list[dict] = []
+_PIPELINE_EVENT_LOCK = threading.Lock()
+
+# Lazy event bus subscription for pipeline capture
+try:
+    from core.event_bus import get_global_bus as _get_bus
+    _PIPELINE_BUS = _get_bus()
+    if _PIPELINE_BUS:
+        async def _pipeline_event_capture(event: Any) -> None:
+            ev = {"type": event.type, "content": str(event.data)[:200], "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+            with _PIPELINE_EVENT_LOCK:
+                _PIPELINE_EVENT_SNAPSHOT.append(ev)
+                if len(_PIPELINE_EVENT_SNAPSHOT) > 100:
+                    _PIPELINE_EVENT_SNAPSHOT[:] = _PIPELINE_EVENT_SNAPSHOT[-100:]
+        _PIPELINE_BUS.on("agent.*", _pipeline_event_capture)
+        _PIPELINE_BUS.on("ai_trader.*", _pipeline_event_capture)
+        _PIPELINE_BUS.on("scoring.*", _pipeline_event_capture)
+        _PIPELINE_BUS.on("trade.*", _pipeline_event_capture)
+except Exception:
+    pass
+
+
+@app.get('/api/pipeline/cycle')
+@app.post('/api/pipeline/cycle')
+async def run_pipeline_cycle(
+    force_symbol: str | None = Query(None),
+) -> dict[str, Any]:
+    """Orquestra pipeline completo: events → agents → score → guard → trade → backtest.
+
+    Retorna dict com cada estágio do pipeline em um único ciclo.
+    """
+    t0 = time.time()
+    result: dict[str, Any] = {
+        "cycle_id": int(t0 * 1000),
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "status": "ok",
+        "mode": _MODE,
+    }
+
+    # 1. Events snapshot
+    with _PIPELINE_EVENT_LOCK:
+        events = list(_PIPELINE_EVENT_SNAPSHOT[-20:])
+    if events:
+        result["events"] = events
+
+    # 2. Agent desk cycle
+    try:
+        from core.agent_desk import run_cycle as _ad_cycle
+        ad = _ad_cycle(None)
+        result["agents"] = ad.get("agents", [])
+        result["decision"] = ad.get("decision")
+        result["guard"] = ad.get("guard")
+        verdict = (ad.get("decision") or {}).get("verdict", "hold")
+        conf = (ad.get("decision") or {}).get("confidence", 0.0)
+    except Exception as exc:
+        logger.warning("Pipeline agent_desk failed: %s", exc)
+        verdict, conf = "hold", 0.0
+
+    # 3. Blended score
+    try:
+        from core.scoring import (
+            score_signal,
+            calculate_volatility,
+            detect_regime,
+            explain_score,
+        )
+        from core.market import fetch_ohlcv
+        candles = fetch_ohlcv(force_symbol or "BTCUSDT", "1h", 50)
+        closes = [c["close"] for c in candles]
+        regime = detect_regime(closes) if closes else "unknown"
+        vol = calculate_volatility(closes) if len(closes) >= 14 else 0.0
+        # Score from agent confidence
+        has_pos = verdict.lower() == 'hold' if len(closes) > 0 else False
+        ctx = {"regime": regime, "volatility": vol}
+        signal = score_signal(
+            closes,
+            verdict.lower(),
+            has_position=has_pos,
+            ctx=ctx,
+        )
+        contributions = [
+            {"source": "confianca", "value": conf},
+            {"source": "regime_score", "value": signal.details.get("regime_score", 0.5)},
+            {"source": "volatility_penalty", "value": signal.details.get("volatility_penalty", 0.0)},
+        ]
+        result["blended_score"] = {
+            "final_score": signal.composite,
+            "regime": regime,
+            "volatility": round(vol, 4),
+            "contributions": contributions,
+            "reason": explain_score(signal),
+        }
+    except Exception as exc:
+        logger.warning("Pipeline scoring failed: %s", exc)
+
+    # 4. Execute trade if guard passed and verdict actionable
+    executed_trade: dict | None = None
+    if guard := ad.get("guard"):
+        if guard.get("passed") and verdict.lower() in ("buy", "sell") and _mode_is_real():
+            try:
+                symbol = force_symbol or "BTCUSDT"
+                from core.paper_engine import get_engine, Order
+                engine = get_engine()
+                # compute quantity
+                snap = engine.snapshot()
+                cash = snap.get("cash", 100000.0)
+                from core.market import fetch_ticker
+                ticker = fetch_ticker(symbol)
+                price = float(ticker["price"])
+                qty = (cash * 0.3 * conf) / price
+                qty = max(qty, 0.0001)
+                order = Order(
+                    symbol=symbol,
+                    side=verdict.lower(),
+                    qty=round(qty, 6),
+                    order_type="market",
+                    reason=guard["adjustments"] and "; ".join(guard["adjustments"]) or "pipeline",
+                )
+                eng_result = engine.submit(order)
+                executed_trade = {
+                    "symbol": symbol,
+                    "side": verdict.lower(),
+                    "qty": round(qty, 6),
+                    "price": price,
+                    "notional": round(qty * price, 2),
+                    "result": eng_result,
+                }
+                _METRICS["orders_paper"] += 1
+            except Exception as exc:
+                logger.warning("Pipeline trade failed: %s", exc)
+                executed_trade = {"error": str(exc)}
+    if executed_trade:
+        result["trade"] = executed_trade
+
+    # 5. Backtest validation snapshot
+    try:
+        from core.backtest import run_backtest
+        from core.market import fetch_ohlcv as _fetch_ohlcv
+        bt_symbol = force_symbol or "BTCUSDT"
+        bt_closes = _fetch_ohlcv(bt_symbol, "1h", 200)
+        bt_prices = [c["close"] for c in bt_closes] if bt_closes else []
+        bt = {}
+        if bt_prices:
+            bt = run_backtest(
+                closes=bt_prices,
+                cfg={"initial_cash_usdt": 10000.0, "fee_pct": 0.001, "max_position_pct": 0.3, "stop_loss_pct": 0.02, "take_profit_pct": 0.05},
+                symbol=bt_symbol,
+                strategy_name="default",
+                use_scoring=True,
+            )
+        result["backtest"] = {
+            "id": bt_symbol,
+            "pnl_pct": bt.get("pnl", bt.get("net_profit_pct", 0.0)),
+            "win_rate": bt.get("win_rate", bt.get("win_rate_pct", 0.0) / 100.0),
+            "sharpe": bt.get("sharpe", bt.get("sharpe_ratio")),
+            "sortino": bt.get("sortino", bt.get("sortino_ratio")),
+            "total_trades": bt.get("total_trades", 0),
+            "max_drawdown_pct": bt.get("max_drawdown_pct", 0.0),
+            "equity_curve": bt.get("equity_curve", []),
+        }
+    except Exception as exc:
+        logger.warning("Pipeline backtest failed: %s", exc)
+
+    result["elapsed_ms"] = int((time.time() - t0) * 1000)
+    return result
+
+# ---------------------------------------------------------------------------
 # Factory & entrypoint
 # ---------------------------------------------------------------------------
 

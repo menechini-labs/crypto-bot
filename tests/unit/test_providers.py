@@ -146,3 +146,57 @@ class TestLLMClientCompat:
             from core.llm_client import chat
             with pytest.raises(RuntimeError, match='LLM disabled'):
                 chat('test')
+
+
+class TestHotSwap:
+    def test_get_active_provider_config_default(self):
+        from core.llm_client import get_active_provider_config, _ACTIVE_INIT_DONE
+        _ACTIVE_INIT_DONE = False  # reset for test
+        cfg = get_active_provider_config()
+        assert 'active_provider' in cfg
+        assert 'fallback_order' in cfg
+        assert 'available_providers' in cfg
+        assert cfg['active_provider'] in cfg['available_providers']
+
+    def test_set_active_provider_invalid_raises(self):
+        from core.llm_client import set_active_provider, _ACTIVE_INIT_DONE
+        _ACTIVE_INIT_DONE = False
+        with pytest.raises(ValueError, match='Unknown provider'):
+            set_active_provider('nonexistent')
+
+    def test_set_active_provider_valid(self):
+        from core.llm_client import (
+            set_active_provider, get_active_provider_config, _ACTIVE_INIT_DONE
+        )
+        _ACTIVE_INIT_DONE = False
+        set_active_provider('deepseek')
+        cfg = get_active_provider_config()
+        assert cfg['active_provider'] == 'deepseek'
+
+    def test_set_active_provider_clears_cache(self):
+        from core.llm_client import (
+            set_active_provider, get_provider, _ACTIVE_INIT_DONE,
+            _PROVIDER_INSTANCES
+        )
+        _ACTIVE_INIT_DONE = False
+        _PROVIDER_INSTANCES.clear()
+        _ = get_provider('openai')
+        assert 'openai' in _PROVIDER_INSTANCES
+        set_active_provider('deepseek')
+        assert 'openai' not in _PROVIDER_INSTANCES  # cache cleared
+
+    def test_set_active_provider_with_fallback(self):
+        from core.llm_client import (
+            set_active_provider, get_active_provider_config, _ACTIVE_INIT_DONE
+        )
+        _ACTIVE_INIT_DONE = False
+        set_active_provider('qwen', fallback_order=['qwen', 'openai'])
+        cfg = get_active_provider_config()
+        assert cfg['active_provider'] == 'qwen'
+        assert cfg['fallback_order'] == ['qwen', 'openai']
+
+    def test_set_active_provider_invalid_fallback_raises(self):
+        from core.llm_client import set_active_provider, _ACTIVE_INIT_DONE
+        _ACTIVE_INIT_DONE = False
+        with pytest.raises(ValueError, match='Unknown provider'):
+            set_active_provider('openai', fallback_order=['bogus'])

@@ -33,6 +33,44 @@ def get_provider(name: str, **kwargs) -> LLMProvider:
 def list_providers() -> list[str]:
     return _list_providers()
 
+# --- Runtime provider config (hot-swap) ---
+_ACTIVE_PROVIDER: str = ''
+_ACTIVE_FALLBACK_ORDER: list[str] = []
+_ACTIVE_INIT_DONE: bool = False
+
+def _init_active_provider():
+    global _ACTIVE_PROVIDER, _ACTIVE_FALLBACK_ORDER, _ACTIVE_INIT_DONE
+    if _ACTIVE_INIT_DONE:
+        return
+    fallback_str = os.getenv('LLM_FALLBACK_ORDER', 'openai')
+    _ACTIVE_FALLBACK_ORDER = [n.strip() for n in fallback_str.split(',') if n.strip()]
+    _ACTIVE_PROVIDER = os.getenv('LLM_ACTIVE_PROVIDER', _ACTIVE_FALLBACK_ORDER[0] if _ACTIVE_FALLBACK_ORDER else 'openai')
+    _ACTIVE_INIT_DONE = True
+
+def set_active_provider(provider: str, fallback_order: list[str] | None = None) -> None:
+    """Switch active provider at runtime. Clears cached instances."""
+    global _ACTIVE_PROVIDER, _ACTIVE_FALLBACK_ORDER
+    _init_active_provider()
+    if provider not in list_providers():
+        raise ValueError(f'Unknown provider: {provider}')
+    if fallback_order is not None:
+        for name in fallback_order:
+            if name not in list_providers():
+                raise ValueError(f'Unknown provider in fallback: {name}')
+        _ACTIVE_FALLBACK_ORDER = list(fallback_order)
+    _ACTIVE_PROVIDER = provider
+    _PROVIDER_INSTANCES.clear()
+    log.info('Active provider set to %s (fallback: %s)', provider, _ACTIVE_FALLBACK_ORDER)
+
+def get_active_provider_config() -> dict:
+    """Return current provider configuration for status endpoints."""
+    _init_active_provider()
+    return {
+        'active_provider': _ACTIVE_PROVIDER,
+        'fallback_order': list(_ACTIVE_FALLBACK_ORDER),
+        'available_providers': list_providers(),
+    }
+
 # Lazy-initialized credential store
 _llm_cred_store: CredentialStore | None = None
 
@@ -99,15 +137,13 @@ def model() -> str:
 
 
 def chat(prompt: str, max_tokens: int = 256, temperature: float = 0.3) -> str:
-    """POST prompt to LLM chat endpoint using provider registry with fallback."""
+    """POST prompt to LLM using active provider with fallback chain."""
     if not is_enabled():
         raise RuntimeError('LLM disabled (ENABLE_LLM=0)')
-
-    fallback_order_str = os.getenv('LLM_FALLBACK_ORDER', 'openai')
-    fallback_order = [name.strip() for name in fallback_order_str.split(',') if name.strip()]
+    _init_active_provider()
 
     last_error: Exception | None = None
-    for name in fallback_order:
+    for name in _ACTIVE_FALLBACK_ORDER:
         try:
             provider = get_provider(name)
             response = provider.generate(
@@ -115,8 +151,8 @@ def chat(prompt: str, max_tokens: int = 256, temperature: float = 0.3) -> str:
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
-            if len(fallback_order) > 1:
-                log.info('Used provider: %s (fallback chain: %s)', name, fallback_order_str)
+            if len(_ACTIVE_FALLBACK_ORDER) > 1:
+                log.info('Used provider: %s (fallback chain: %s)', name, _ACTIVE_FALLBACK_ORDER)
             return response
         except Exception as e:
             log.warning('Provider %s failed: %s', name, e)

@@ -42,9 +42,15 @@ _load_dotenv()
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from starlette.responses import StreamingResponse
+
+
+def _get_provider_config() -> dict:
+    from core.llm_client import get_active_provider_config
+    return get_active_provider_config()
 
 try:
     import uvicorn
@@ -744,6 +750,9 @@ async def health() -> dict[str, Any]:
         'mode_real': _mode_is_real(),
         'allow_live_trading': _ALLOW_LIVE,
         'llm_enabled': llm_enabled,
+        'llm_active_provider': _get_provider_config().get('active_provider'),
+        'llm_fallback_order': _get_provider_config().get('fallback_order'),
+        'llm_available_providers': _get_provider_config().get('available_providers'),
         'registry_strategies': sorted(_registry_get_all().keys()),
         'scoring_available': importlib.util.find_spec('core.scoring') is not None,
         'indicators_available': importlib.util.find_spec('core.indicators') is not None,
@@ -799,6 +808,32 @@ def _persist_mode(mode: str) -> None:
         env_path.write_text('\n'.join(out) + '\n', encoding='utf-8')
     except Exception:
         pass
+
+
+@app.get('/api/config/provider')
+async def get_provider_config() -> dict[str, Any]:
+    """Current LLM provider config."""
+    return _get_provider_config()
+
+
+class ProviderSwitchRequest(BaseModel):
+    provider: str
+    fallback_order: str | None = None
+
+
+@app.post('/api/config/provider')
+async def switch_provider(payload: ProviderSwitchRequest) -> dict[str, bool]:
+    """Switch active LLM provider at runtime."""
+    from core.llm_client import set_active_provider
+
+    fallback = None
+    if payload.fallback_order:
+        fallback = [n.strip() for n in payload.fallback_order.split(',') if n.strip()]
+    try:
+        set_active_provider(payload.provider, fallback_order=fallback)
+        return {'ok': True}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get('/api/swarm-presets')

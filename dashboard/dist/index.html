@@ -10,9 +10,33 @@
       href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <script type="module" crossorigin src="/assets/index-efj4nWTl.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CVPmcwjS.css">
-  </head>
+    <script type="module" src="/assets/index-efj4nWTl.js"></script>
+    <link rel="stylesheet" href="/assets/index-CVPmcwjS.css">
+  
+<script>
+window.onerror = function(msg, url, line, col, err) {
+  var root = document.getElementById('root');
+  if (root) {
+    root.innerHTML = '<div style="color:#f87171;padding:2rem;font-family:monospace">' +
+      '<h2>⚠ Runtime Error</h2>' +
+      '<p><strong>' + (err ? err.message : msg) + '</strong></p>' +
+      '<p style="color:#8b97a8;font-size:13px">' + url + ':' + line + ':' + col + '</p>' +
+      '</div>';
+  }
+  console.error('FATAL:', msg, url, line);
+  return false;
+};
+window.addEventListener('unhandledrejection', function(e) {
+  var root = document.getElementById('root');
+  if (root) {
+    root.innerHTML = '<div style="color:#f87171;padding:2rem;font-family:monospace">' +
+      '<h2>⚠ Unhandled Promise Rejection</h2>' +
+      '<p><strong>' + (e.reason ? e.reason.message || e.reason : 'unknown') + '</strong></p>' +
+      '</div>';
+  }
+});
+</script>
+</head>
   <body>
     <div id="root"></div>
   </body>

@@ -2,7 +2,7 @@
 title: 'Day-Trade Platform Improvements: AI-Driven Minute Indicators + Ready-Made Strategy Templates'
 type: 'feature'
 created: '2026-07-18'
-status: 'in-progress'
+status: 'done'
 baseline_revision: '4ca3d85ca0eb02a1860b07f01c0eaf54b51b6f29'
 review_loop_iteration: 0
 followup_review_recommended: false

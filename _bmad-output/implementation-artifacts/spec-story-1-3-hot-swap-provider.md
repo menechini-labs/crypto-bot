@@ -2,7 +2,7 @@
 title: 'Story 1.3 — Hot-Swap Provider Mid-Strategy'
 type: 'feature'
 created: '2026-07-19'
-status: 'in-review'
+status: 'done'
 review_loop_iteration: 0
 followup_review_recommended: false
 baseline_revision: e7b1716

@@ -32,3 +32,5 @@ dashboard/node_modules/
 # Build / test artifacts
 dashboard/test-results/
 *.bak
+.lint-venv/
+dashboard/dist/assets/

@@ -1308,7 +1308,7 @@ async def api_coin_config_get(symbol: str) -> dict[str, Any]:
 @app.patch('/api/coins/{symbol}/config')
 async def api_coin_config_set(symbol: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Update per-coin risk config (SL%, TP%, trailing, auto_trade)."""
-    from core.coin_manager import set_coin_config
+    from core.coin_manager import set_coin_config, get_coin_config, list_coin_configs  # noqa: F401
     sym = symbol.upper()
     # Validation
     for k in ('sl_pct', 'tp_pct', 'trailing_pct'):

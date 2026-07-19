@@ -30,9 +30,9 @@ NEWS_FEEDS = [
         'reliability': 0.6,
     },
     {
-        'id': 'cryptocompare',
-        'name': 'CryptoCompare',
-        'url': 'https://www.cryptocompare.com/media/news/feed',
+        'id': 'coindesk',
+        'name': 'CoinDesk',
+        'url': 'https://www.coindesk.com/arc/outboundfeeds/rss/',
         'reliability': 0.7,
     },
 ]
